@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscador de Productos con Escáner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qrcode/html5-qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/html-docx-js/dist/html-docx.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .list-item-animation {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+        #scanner-modal {
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        #scanner-container {
+            border: 3px solid white;
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-2xl mx-auto bg-white rounded-2xl shadow-lg p-6 md:p-8">
+        
+        <header class="text-center mb-6">
+            <h1 class="text-xl md:text-2xl font-bold text-gray-900">Buscador de Productos</h1>
+            <p class="text-sm text-gray-500 mt-1">Cargando lista de productos desde Google Drive...</p>
+        </header>
+
+        <div id="upload-section" class="mb-6">
+            <h2 class="text-base font-semibold text-gray-700 mb-2">Paso 1: Carga de datos</h2>
+            <div class="p-4 border-2 border-dashed border-gray-300 rounded-lg">
+                 <p id="file-status" class="text-center text-sm font-medium h-5"></p>
+            </div>
+        </div>
+
+        <!-- Paso 2: Información del Proveedor -->
+        <div id="provider-section" class="hidden mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-base font-semibold text-gray-700">Paso 2: Información del Proveedor</h2>
+                <button id="show-history-btn" class="bg-purple-600 text-white font-semibold py-1 px-3 rounded-lg hover:bg-purple-700 transition-colors text-sm">Ver Historial</button>
+            </div>
+            <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <div class="flex-grow">
+                        <label for="provider-name" class="block text-sm font-medium text-gray-600 mb-1">Nombre del Proveedor</label>
+                        <input type="text" id="provider-name" placeholder="Ej: Distribuidora ABC" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                    </div>
+                    <div class="flex-grow">
+                        <label for="provider-contact" class="block text-sm font-medium text-gray-600 mb-1">Contacto</label>
+                        <input type="text" id="provider-contact" placeholder="Teléfono o email" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                    </div>
+                    <div class="flex items-end">
+                        <button id="save-provider-btn" class="bg-blue-600 text-white font-semibold py-2 px-3 rounded-lg hover:bg-blue-700 transition-colors text-sm">Guardar Proveedor</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Paso 3: Búsqueda de Productos -->
+        <div id="search-section" class="hidden mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-base font-semibold text-gray-700">Paso 3: Busca el Producto</h2>
+            </div>
+            <div>
+                <label for="search-input" class="block text-sm font-medium text-gray-600 mb-1">Buscar por Descripción o Código de Barras</label>
+                <div class="flex items-center gap-2">
+                    <!-- MODIFICACIÓN: Se establece inputmode="text" para un teclado de texto general -->
+                    <input type="search" inputmode="text" id="search-input" placeholder="Escribe una descripción, código o escanea..." class="flex-grow w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-sm">
+                    <button id="scan-button" class="p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors" title="Escanear código de barras">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 3h-1m-5-3H8M7 8H6m11 4v1m1-5h1m-1 5v1m-6-1H8m1-5H8m5 11v1m-1-6v1m-5-1H6m6 6h1m-1-5h-1m5 5h1m-6-5h-1" /></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="result-section" class="mt-6 p-6 bg-gray-50 rounded-lg min-h-[100px] flex items-center justify-center">
+             <p id="result-text" class="text-gray-500 text-center text-sm">Aquí se mostrará el resultado de la búsqueda.</p>
+        </div>
+
+        <div id="order-section" class="hidden mt-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-gray-800">Lista de Pedido</h2>
+                <div class="flex gap-2">
+                    <button id="save-order-btn" class="bg-blue-600 text-white font-semibold py-1 px-3 rounded-lg hover:bg-blue-700 transition-colors text-sm">Guardar Pedido</button>
+                    <div class="relative">
+                        <button id="export-dropdown-btn" class="bg-green-600 text-white font-semibold py-1 px-3 rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-1">
+                            Exportar Como
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        <div id="export-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                            <div class="py-1">
+                                <button id="export-pdf" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    Exportar PDF
+                                </button>
+                                <button id="export-excel" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                    Exportar Excel
+                                </button>
+                                <button id="export-doc" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    Exportar Word
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="clear-order-btn" class="bg-red-600 text-white font-semibold py-1 px-3 rounded-lg hover:bg-red-700 transition-colors text-sm">Limpiar</button>
+                </div>
+            </div>
+            
+            <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
+                <ul id="order-list" class="divide-y divide-gray-200"></ul>
+            </div>
+        </div>
+
+        <div id="history-section" class="hidden mt-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-gray-800">Historial de Pedidos</h2>
+                <div class="flex gap-2">
+                    <button id="clear-history-btn" class="bg-red-600 text-white font-semibold py-1 px-3 rounded-lg hover:bg-red-700 transition-colors text-sm">Borrar Historial</button>
+                    <button id="toggle-history-btn" class="bg-gray-600 text-white font-semibold py-1 px-3 rounded-lg hover:bg-gray-700 transition-colors text-sm">Ocultar Historial</button>
+                </div>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
+                <div id="history-list" class="divide-y divide-gray-200"></div>
+                <div id="no-history-message" class="p-6 text-center text-gray-500 text-sm">
+                    No hay pedidos guardados en el historial.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="scanner-modal" class="fixed inset-0 z-50 flex-col items-center justify-center hidden">
+        <div id="scanner-container" class="w-11/12 max-w-md bg-white rounded-lg overflow-hidden relative">
+            <div id="scanner-reader" class="w-full"></div>
+            <p id="scanner-status" class="text-center text-white bg-gray-800 p-2">Apuntando a la cámara...</p>
+        </div>
+        <button id="close-scanner-btn" class="mt-4 bg-red-600 text-white font-bold py-2 px-6 rounded-lg shadow-lg">Cerrar Escáner</button>
+    </div>
+
+
+    <script>
+        // --- Variables Globales ---
+        let productData = [];
+        let orderList = [];
+        let orderHistory = [];
+        let currentProvider = { name: '', contact: '' };
+        let providerHistory = [];
+        const { jsPDF } = window.jspdf;
+        let html5QrCode;
+
+        // --- Elementos del DOM ---
+        const fileStatus = document.getElementById('file-status');
+        const providerSection = document.getElementById('provider-section');
+        const searchSection = document.getElementById('search-section');
+        const searchInput = document.getElementById('search-input');
+        const scanButton = document.getElementById('scan-button');
+        const resultSection = document.getElementById('result-section');
+        const resultText = document.getElementById('result-text');
+        const orderSection = document.getElementById('order-section');
+        const orderListElement = document.getElementById('order-list');
+        const scannerModal = document.getElementById('scanner-modal');
+        const scannerStatus = document.getElementById('scanner-status');
+        const closeScannerBtn = document.getElementById('close-scanner-btn');
+        const historySection = document.getElementById('history-section');
+        const historyList = document.getElementById('history-list');
+        const noHistoryMessage = document.getElementById('no-history-message');
+        const providerNameInput = document.getElementById('provider-name');
+        const providerContactInput = document.getElementById('provider-contact');
+        const exportDropdownBtn = document.getElementById('export-dropdown-btn');
+        const exportDropdown = document.getElementById('export-dropdown');
+        const clearHistoryBtn = document.getElementById('clear-history-btn');
+        
+        // --- Lógica de Carga Automática ---
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDefaultGDriveFile();
+            loadOrderHistory();
+            loadProviderHistory();
+        });
+
+        async function loadDefaultGDriveFile() {
+            const fileId = '1VnXlnnKn_RAy3VGp_jXj44_39-SzgjH4';
+            const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+            
+            fileStatus.textContent = 'Cargando desde Google Drive...';
+            fileStatus.className = 'text-center text-sm text-blue-600 font-medium h-5';
+
+            const proxies = [
+                `https://corsproxy.io/?${encodeURIComponent(downloadUrl)}`,
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(downloadUrl)}`,
+                `https://thingproxy.freeboard.io/fetch/${downloadUrl}`
+            ];
+
+            let success = false;
+            for (const proxyUrl of proxies) {
+                try {
+                    console.log(`Intentando con el proxy: ${proxyUrl}`);
+                    const response = await fetch(proxyUrl);
+                    if (!response.ok) {
+                        throw new Error(`Error en la respuesta del proxy: ${response.statusText}`);
+                    }
+                    const csvText = await response.text();
+                    parseCSV(csvText);
+                    success = true;
+                    console.log(`Carga exitosa con: ${proxyUrl}`);
+                    break;
+                } catch (error) {
+                    console.error(`Fallo al usar el proxy ${proxyUrl}:`, error);
+                }
+            }
+
+            if (!success) {
+                console.error('Todos los proxies fallaron.');
+                fileStatus.textContent = 'Fallo al cargar desde Drive. No se pudo establecer conexión.';
+                fileStatus.className = 'text-center text-sm text-red-600 font-medium h-5';
+            }
+        }
+
+        function parseCSV(csvText) {
+            productData = [];
+            const lines = csvText.split(/\r\n|\n/);
+            const startIndex = lines[0].toLowerCase().includes('descripcion') ? 1 : 0;
+
+            for (let i = startIndex; i < lines.length; i++) {
+                if (lines[i].trim() === '') continue;
+                const parts = lines[i].split(';');
+                if (parts.length >= 2) {
+                    const description = parts[0].trim().replace(/"/g, '');
+                    const barcode = parts[1].trim().replace(/"/g, '');
+                    if (description && barcode) {
+                        productData.push({ description, barcode });
+                    }
+                }
+            }
+            if (productData.length > 0) {
+                fileStatus.textContent = `¡Éxito! Se cargaron ${productData.length} productos.`;
+                fileStatus.className = 'text-center text-sm text-green-600 font-medium h-5';
+                providerSection.classList.remove('hidden');
+                document.getElementById('upload-section').classList.add('hidden');
+                providerNameInput.focus();
+            } else {
+                fileStatus.textContent = 'No se encontraron datos válidos en el archivo.';
+                fileStatus.className = 'text-center text-sm text-red-600 font-medium h-5';
+            }
+        }
+
+        // --- Lógica de Búsqueda y Pedido ---
+        function handleSearch() {
+            const rawQuery = searchInput.value.trim();
+            const lowerCaseQuery = rawQuery.toLowerCase();
+
+            if (rawQuery === '') {
+                resultText.innerHTML = `<p class="text-gray-500 text-center text-sm">Aquí se mostrará el resultado de la búsqueda.</p>`;
+                resultSection.className = 'mt-6 p-6 bg-gray-50 rounded-lg min-h-[100px] flex items-center justify-center';
+                return;
+            }
+
+            if (lowerCaseQuery.length < 3 && isNaN(parseInt(rawQuery))) {
+                resultText.innerHTML = `<p class="text-gray-500 text-center text-sm">Escribe al menos 3 letras para empezar a buscar...</p>`;
+                resultSection.className = 'mt-6 p-6 bg-yellow-50 border border-yellow-200 rounded-lg';
+                return;
+            }
+
+            const barcodeMatch = productData.find(p => p.barcode === rawQuery);
+            const descriptionMatches = productData.filter(p => p.description.toLowerCase().includes(lowerCaseQuery));
+            
+            const allMatches = [];
+            if (barcodeMatch) {
+                allMatches.push(barcodeMatch);
+            }
+            allMatches.push(...descriptionMatches);
+            
+            const uniqueProducts = [...new Map(allMatches.map(item => [item.barcode, item])).values()];
+
+            if (uniqueProducts.length > 0) {
+                displayMultipleResults(uniqueProducts);
+            } else {
+                resultText.innerHTML = `
+                    <div class="text-center">
+                        <span class="block text-xs text-gray-500">No se encontraron productos para:</span>
+                        <strong class="block text-lg text-red-700 mt-1">${searchInput.value.trim()}</strong>
+                    </div>`;
+                resultSection.className = 'mt-6 p-6 bg-red-50 border border-red-200 rounded-lg';
+            }
+        }
+
+        function displaySingleProduct(product) {
+            resultText.innerHTML = `
+                <div class="text-center w-full">
+                    <span class="block text-xs text-gray-500">Producto Seleccionado:</span>
+                    <strong class="block text-lg md:text-xl text-blue-800 mt-1">${product.description}</strong>
+                    <p class="text-sm text-gray-500 mt-1">Código: ${product.barcode}</p>
+                    <div class="mt-4 flex justify-center items-center gap-2">
+                        <input type="number" id="quantity-input" value="1" min="1" class="w-20 text-center px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                        <button id="add-to-order-btn" class="bg-green-500 text-white font-semibold px-4 py-2 rounded-lg hover:bg-green-600 transition-colors shadow-sm text-sm">Añadir al pedido</button>
+                    </div>
+                </div>`;
+            resultSection.className = 'mt-6 p-6 bg-green-50 border border-green-200 rounded-lg';
+            
+            document.getElementById('add-to-order-btn').addEventListener('click', () => {
+                const quantityInput = document.getElementById('quantity-input');
+                const quantity = parseInt(quantityInput.value, 10);
+                if (quantity > 0) {
+                    addToOrder(product, quantity);
+                    resultText.innerHTML = `<p class="text-gray-500 text-center text-sm">Producto añadido. Busca o escanea el siguiente.</p>`;
+                    resultSection.className = 'mt-6 p-6 bg-gray-50 rounded-lg';
+                    searchInput.value = '';
+                    searchInput.focus();
+                }
+            });
+        }
+        
+        function displayMultipleResults(products) {
+            let resultsHtml = `
+                <div class="text-left w-full">
+                    <p class="font-semibold mb-3 text-gray-700">Se encontraron ${products.length} resultados. Selecciona uno:</p>
+                    <ul class="max-h-60 overflow-y-auto divide-y divide-gray-200 border border-gray-200 rounded-lg bg-white">`;
+            
+            products.forEach(product => {
+                resultsHtml += `
+                    <li 
+                        class="p-3 hover:bg-blue-50 cursor-pointer transition-colors duration-150" 
+                        data-barcode="${product.barcode}"
+                    >
+                        <strong class="block text-sm text-gray-800">${product.description}</strong>
+                        <span class="text-xs text-gray-500">Código: ${product.barcode}</span>
+                    </li>`;
+            });
+
+            resultsHtml += `</ul></div>`;
+            resultText.innerHTML = resultsHtml;
+            resultSection.className = 'mt-6 p-6 bg-gray-50 rounded-lg';
+
+            resultSection.querySelectorAll('li[data-barcode]').forEach(item => {
+                item.addEventListener('click', () => {
+                    const barcode = item.dataset.barcode;
+                    const selectedProduct = productData.find(p => p.barcode === barcode);
+                    if (selectedProduct) {
+                        displaySingleProduct(selectedProduct);
+                    }
+                });
+            });
+        }
+
+        function addToOrder(product, quantity) {
+            const existingProduct = orderList.find(item => item.barcode === product.barcode);
+
+            if (existingProduct) {
+                existingProduct.quantity += quantity;
+            } else {
+                orderList.push({ ...product, quantity: quantity });
+            }
+            
+            orderSection.classList.remove('hidden');
+            renderOrderList();
+        }
+
+        function renderOrderList() {
+            orderListElement.innerHTML = '';
+            if (orderList.length === 0) {
+                orderSection.classList.add('hidden');
+                return;
+            }
+            orderList.forEach((item, index) => {
+                const li = document.createElement('li');
+                li.className = 'p-4 flex justify-between items-center list-item-animation text-sm';
+                li.innerHTML = `
+                    <div class="flex-grow pr-4">
+                        <span class="text-gray-700">${item.description}</span>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <button data-index="${index}" class="decrease-qty-btn bg-gray-200 text-gray-700 w-7 h-7 rounded-full font-bold hover:bg-gray-300 transition">-</button>
+                        <input type="number" value="${item.quantity}" min="1" data-index="${index}" class="quantity-in-list w-16 text-center border border-gray-300 rounded-md py-1">
+                        <button data-index="${index}" class="increase-qty-btn bg-gray-200 text-gray-700 w-7 h-7 rounded-full font-bold hover:bg-gray-300 transition">+</button>
+                        <button data-index="${index}" class="remove-item-btn text-red-500 hover:text-red-700 ml-2 font-semibold text-lg">X</button>
+                    </div>`;
+                orderListElement.appendChild(li);
+            });
+
+            // Event listeners for quantity controls
+            document.querySelectorAll('.increase-qty-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const index = parseInt(e.target.dataset.index);
+                    orderList[index].quantity++;
+                    renderOrderList();
+                });
+            });
+
+            document.querySelectorAll('.decrease-qty-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const index = parseInt(e.target.dataset.index);
+                    orderList[index].quantity--;
+                    if (orderList[index].quantity <= 0) {
+                        orderList.splice(index, 1);
+                    }
+                    renderOrderList();
+                });
+            });
+
+            document.querySelectorAll('.quantity-in-list').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const index = parseInt(e.target.dataset.index);
+                    const newQuantity = parseInt(e.target.value, 10);
+                    if (newQuantity > 0) {
+                        orderList[index].quantity = newQuantity;
+                    } else {
+                        orderList.splice(index, 1);
+                    }
+                    renderOrderList();
+                });
+            });
+
+            document.querySelectorAll('.remove-item-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    orderList.splice(parseInt(e.target.dataset.index), 1);
+                    renderOrderList();
+                });
+            });
+        }
+
+        // --- Lógica del Historial de Pedidos ---
+        
+        function loadOrderHistory() {
+            const savedHistory = localStorage.getItem('orderHistory');
+            if (savedHistory) {
+                try {
+                    orderHistory = JSON.parse(savedHistory);
+                    renderHistoryList();
+                } catch (error) {
+                    console.error('Error al cargar el historial:', error);
+                    orderHistory = [];
+                }
+            }
+        }
+
+        function saveOrderHistory() {
+            localStorage.setItem('orderHistory', JSON.stringify(orderHistory));
+        }
+
+        function saveCurrentOrder() {
+            if (orderList.length === 0) {
+                alert('No hay productos en el pedido para guardar.');
+                return;
+            }
+
+            const orderName = prompt('Nombre del pedido:', `Pedido ${new Date().toLocaleDateString()}`);
+            if (!orderName) return;
+
+            const newOrder = {
+                id: Date.now(),
+                name: orderName,
+                date: new Date().toISOString(),
+                items: [...orderList],
+                provider: { ...currentProvider }
+            };
+
+            // Eliminar pedidos anteriores del mismo proveedor y día
+            const removedCount = removeOldOrdersFromSameProviderAndDay(currentProvider.name, newOrder.date);
+
+            orderHistory.unshift(newOrder);
+            
+            // Mantener solo los últimos 20 pedidos
+            if (orderHistory.length > 20) {
+                orderHistory = orderHistory.slice(0, 20);
+            }
+
+            saveOrderHistory();
+            renderHistoryList();
+            
+            const providerInfo = currentProvider.name ? ` para ${currentProvider.name}` : '';
+            let message = `Pedido "${orderName}" guardado exitosamente${providerInfo}.`;
+            
+            if (removedCount > 0) {
+                message += `\n\n🧹 Se eliminaron ${removedCount} pedido(s) anterior(es) del mismo proveedor y día.`;
+            }
+            
+            alert(message);
+        }
+
+        function renderHistoryList() {
+            historyList.innerHTML = '';
+            
+            if (orderHistory.length === 0) {
+                noHistoryMessage.classList.remove('hidden');
+                return;
+            }
+
+            noHistoryMessage.classList.add('hidden');
+
+            orderHistory.forEach(order => {
+                const orderElement = document.createElement('div');
+                orderElement.className = 'p-4 hover:bg-gray-50 transition-colors';
+                
+                const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+                const orderDate = new Date(order.date).toLocaleString('es-ES');
+                const providerInfo = order.provider && order.provider.name ? 
+                    `<p class="text-xs text-blue-600 mt-1">Proveedor: ${order.provider.name}</p>` : '';
+                
+                orderElement.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div class="flex-grow">
+                            <h3 class="font-semibold text-gray-800 text-sm">${order.name}</h3>
+                            <p class="text-xs text-gray-500 mt-1">${orderDate}</p>
+                            <p class="text-xs text-gray-600 mt-1">${totalItems} productos</p>
+                            ${providerInfo}
+                        </div>
+                        <div class="flex gap-1 ml-4">
+                            <button class="restore-order-btn bg-green-600 text-white text-xs px-2 py-1 rounded hover:bg-green-700 transition-colors" data-id="${order.id}" title="Restaurar pedido">
+                                Restaurar
+                            </button>
+                            <button class="delete-order-btn bg-red-600 text-white text-xs px-2 py-1 rounded hover:bg-red-700 transition-colors" data-id="${order.id}" title="Eliminar pedido">
+                                Eliminar
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                historyList.appendChild(orderElement);
+            });
+
+            // Event listeners para los botones
+            document.querySelectorAll('.restore-order-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const orderId = parseInt(e.target.dataset.id);
+                    restoreOrder(orderId);
+                });
+            });
+
+            document.querySelectorAll('.delete-order-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const orderId = parseInt(e.target.dataset.id);
+                    deleteOrder(orderId);
+                });
+            });
+        }
+
+        function restoreOrder(orderId) {
+            const order = orderHistory.find(o => o.id === orderId);
+            if (!order) return;
+
+            // Si ya hay productos en el pedido actual, agregar al pedido existente
+            if (orderList.length > 0) {
+                addOrderItemsToCurrentOrder(order.items);
+            } else {
+                // Si no hay productos, cargar el pedido completo
+                orderList = [...order.items];
+            }
+            
+            // Restaurar información del proveedor si existe
+            if (order.provider && order.provider.name) {
+                currentProvider = { ...order.provider };
+                providerNameInput.value = order.provider.name || '';
+                providerContactInput.value = order.provider.contact || '';
+                providerSection.classList.remove('hidden');
+            } else {
+                // Si no hay proveedor, limpiar y mostrar la sección para que pueda agregar uno
+                clearProvider();
+                providerSection.classList.remove('hidden');
+            }
+            
+            // Mostrar secciones necesarias
+            orderSection.classList.remove('hidden');
+            searchSection.classList.remove('hidden');
+            renderOrderList();
+            
+            // Enfocar en el campo de búsqueda para continuar agregando productos
+            searchInput.focus();
+            
+            // Scroll hacia la sección de búsqueda para continuar agregando productos
+            searchSection.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function deleteOrder(orderId) {
+            const order = orderHistory.find(o => o.id === orderId);
+            if (!order) return;
+
+            if (confirm(`¿Estás seguro de que deseas eliminar el pedido "${order.name}"?`)) {
+                orderHistory = orderHistory.filter(o => o.id !== orderId);
+                saveOrderHistory();
+                renderHistoryList();
+            }
+        }
+
+        function clearCurrentOrder() {
+            if (orderList.length === 0) return;
+            
+            if (confirm('¿Estás seguro de que deseas limpiar el pedido actual?')) {
+                orderList = [];
+                orderSection.classList.add('hidden');
+                clearProvider();
+                renderOrderList();
+            }
+        }
+
+        function toggleHistorySection() {
+            if (historySection.classList.contains('hidden')) {
+                historySection.classList.remove('hidden');
+                document.getElementById('toggle-history-btn').textContent = 'Ocultar Historial';
+            } else {
+                historySection.classList.add('hidden');
+                document.getElementById('toggle-history-btn').textContent = 'Ver Historial';
+            }
+        }
+
+        function clearAllHistory() {
+            if (orderHistory.length === 0) {
+                alert('El historial ya está vacío.');
+                return;
+            }
+
+            const confirmMessage = `¿Estás seguro de que deseas borrar TODO el historial?\n\n📊 Se eliminarán ${orderHistory.length} pedido(s) guardado(s).\n\n⚠️ Esta acción NO se puede deshacer.`;
+            
+            if (confirm(confirmMessage)) {
+                orderHistory = [];
+                saveOrderHistory();
+                renderHistoryList();
+                
+                alert('✅ Historial borrado exitosamente.\n\nTodos los pedidos guardados han sido eliminados.');
+            }
+        }
+
+        // --- Lógica de Proveedores ---
+        
+        function loadProviderHistory() {
+            const savedProviders = localStorage.getItem('providerHistory');
+            if (savedProviders) {
+                try {
+                    providerHistory = JSON.parse(savedProviders);
+                } catch (error) {
+                    console.error('Error al cargar el historial de proveedores:', error);
+                    providerHistory = [];
+                }
+            }
+        }
+
+        function saveProviderHistory() {
+            localStorage.setItem('providerHistory', JSON.stringify(providerHistory));
+        }
+
+        function saveCurrentProvider() {
+            const name = providerNameInput.value.trim();
+            const contact = providerContactInput.value.trim();
+
+            if (!name) {
+                alert('Por favor, ingresa el nombre del proveedor.');
+                providerNameInput.focus();
+                return;
+            }
+
+            currentProvider = { name, contact };
+            
+            // Agregar a historial si no existe
+            const existingProvider = providerHistory.find(p => p.name.toLowerCase() === name.toLowerCase());
+            if (!existingProvider) {
+                providerHistory.unshift({ name, contact });
+                // Mantener solo los últimos 10 proveedores
+                if (providerHistory.length > 10) {
+                    providerHistory = providerHistory.slice(0, 10);
+                }
+                saveProviderHistory();
+            }
+
+            // Mostrar la sección de búsqueda
+            searchSection.classList.remove('hidden');
+            searchInput.focus();
+
+            // Mostrar confirmación
+            const message = contact ? 
+                `Proveedor "${name}" guardado. Contacto: ${contact}. Ahora puedes buscar productos.` : 
+                `Proveedor "${name}" guardado. Ahora puedes buscar productos.`;
+            alert(message);
+        }
+
+        function selectProviderFromHistory(provider) {
+            providerNameInput.value = provider.name;
+            providerContactInput.value = provider.contact;
+            currentProvider = { ...provider };
+        }
+
+        function clearProvider() {
+            providerNameInput.value = '';
+            providerContactInput.value = '';
+            currentProvider = { name: '', contact: '' };
+        }
+
+        function addOrderItemsToCurrentOrder(itemsToAdd) {
+            itemsToAdd.forEach(item => {
+                const existingProduct = orderList.find(existingItem => existingItem.barcode === item.barcode);
+                
+                if (existingProduct) {
+                    // Si el producto ya existe, sumar las cantidades
+                    existingProduct.quantity += item.quantity;
+                } else {
+                    // Si no existe, agregarlo al pedido
+                    orderList.push({ ...item });
+                }
+            });
+        }
+
+        function removeOldOrdersFromSameProviderAndDay(providerName, currentDate) {
+            if (!providerName) return 0; // No eliminar si no hay proveedor
+            
+            const today = new Date(currentDate);
+            const todayString = today.toDateString();
+            
+            const initialCount = orderHistory.length;
+            
+            // Filtrar pedidos que NO sean del mismo proveedor y día
+            orderHistory = orderHistory.filter(order => {
+                if (!order.provider || !order.provider.name) return true;
+                
+                const orderDate = new Date(order.date);
+                const orderDateString = orderDate.toDateString();
+                
+                // Mantener el pedido si:
+                // - No es del mismo proveedor, O
+                // - No es del mismo día
+                return !(order.provider.name.toLowerCase() === providerName.toLowerCase() && 
+                        orderDateString === todayString);
+            });
+            
+            const removedCount = initialCount - orderHistory.length;
+            
+            if (removedCount > 0) {
+                saveOrderHistory();
+                renderHistoryList();
+            }
+            
+            return removedCount;
+        }
+
+        // --- Lógica del Menú de Exportación ---
+        
+        function toggleExportDropdown() {
+            if (exportDropdown.classList.contains('hidden')) {
+                exportDropdown.classList.remove('hidden');
+            } else {
+                exportDropdown.classList.add('hidden');
+            }
+        }
+
+        function hideExportDropdown() {
+            exportDropdown.classList.add('hidden');
+        }
+
+        function handleExportClick(format) {
+            hideExportDropdown();
+            
+            if (orderList.length === 0) {
+                alert('No hay productos en el pedido para exportar.');
+                return;
+            }
+
+            switch(format) {
+                case 'pdf':
+                    exportToPDF();
+                    break;
+                case 'excel':
+                    exportToExcel();
+                    break;
+                case 'word':
+                    exportToWord();
+                    break;
+            }
+        }
+        
+        // --- Lógica del Escáner ---
+        function startScanner() {
+            scannerModal.classList.remove('hidden');
+            scannerModal.classList.add('flex');
+            
+            html5QrCode = new Html5Qrcode("scanner-reader");
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+            const onScanSuccess = (decodedText, decodedResult) => {
+                searchInput.value = decodedText;
+                stopScanner();
+                handleSearch();
+            };
+
+            const onScanFailure = (error) => {
+                 // No hacer nada en caso de fallo, sigue intentando
+            };
+            
+            html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
+                .catch(err => {
+                    scannerStatus.textContent = "Error al iniciar la cámara.";
+                    console.error("No se pudo iniciar el escáner", err);
+                });
+        }
+
+        function stopScanner() {
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().then(() => {
+                    console.log("Escáner detenido.");
+                }).catch(err => {
+                    console.error("Fallo al detener el escáner.", err);
+                });
+            }
+            scannerModal.classList.add('hidden');
+            scannerModal.classList.remove('flex');
+        }
+
+        // --- Lógica de Exportación ---
+        function downloadFile(filename, content, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+
+        function exportToPDF() {
+            if(orderList.length === 0) return;
+            const doc = new jsPDF();
+            
+            // Título
+            doc.setFontSize(16);
+            doc.setFont(undefined, 'bold');
+            doc.text("Lista de Pedido", 20, 20);
+            
+            // Fecha
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Fecha: ${new Date().toLocaleDateString('es-ES')}`, 20, 30);
+            
+            // Información del proveedor
+            if (currentProvider.name) {
+                doc.text(`Proveedor: ${currentProvider.name}`, 20, 35);
+                if (currentProvider.contact) {
+                    doc.text(`Contacto: ${currentProvider.contact}`, 20, 40);
+                }
+            }
+            
+            // Línea separadora
+            const lineY = currentProvider.name ? 45 : 35;
+            doc.line(20, lineY, 190, lineY);
+            
+            // Encabezados de tabla
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            const tableStartY = lineY + 10;
+            doc.text("Cantidad", 20, tableStartY);
+            doc.text("Descripción", 50, tableStartY);
+            doc.text("Código", 150, tableStartY);
+            
+            // Línea debajo de encabezados
+            doc.line(20, tableStartY + 3, 190, tableStartY + 3);
+            
+            // Contenido de la tabla
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            let yPosition = tableStartY + 10;
+            
+            orderList.forEach((item, i) => {
+                if (yPosition > 280) {
+                    doc.addPage();
+                    yPosition = 20;
+                }
+                
+                doc.text(item.quantity.toString(), 20, yPosition);
+                doc.text(item.description, 50, yPosition);
+                doc.text(item.barcode, 150, yPosition);
+                yPosition += 8;
+            });
+            
+            // Total de productos
+            const totalItems = orderList.reduce((sum, item) => sum + item.quantity, 0);
+            doc.setFont(undefined, 'bold');
+            doc.text(`Total de productos: ${totalItems}`, 20, yPosition + 10);
+            
+            doc.save("pedido.pdf");
+        }
+
+        function exportToWord() {
+            if(orderList.length === 0) return;
+            
+            const totalItems = orderList.reduce((sum, item) => sum + item.quantity, 0);
+            const currentDate = new Date().toLocaleDateString('es-ES');
+            
+            const providerInfo = currentProvider.name ? `
+                <div style="margin: 10px 0; padding: 10px; background-color: #eff6ff; border-left: 4px solid #2563eb;">
+                    <p style="margin: 0; font-weight: bold; color: #1e40af;">Proveedor: ${currentProvider.name}</p>
+                    ${currentProvider.contact ? `<p style="margin: 5px 0 0 0; color: #374151;">Contacto: ${currentProvider.contact}</p>` : ''}
+                </div>
+            ` : '';
+            
+            let htmlContent = `
+                <h1 style="text-align: center; color: #2563eb;">Lista de Pedido</h1>
+                <p style="text-align: center; color: #6b7280;">Fecha: ${currentDate}</p>
+                ${providerInfo}
+                <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                    <thead>
+                        <tr style="background-color: #f3f4f6;">
+                            <th style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">Cantidad</th>
+                            <th style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">Descripción</th>
+                            <th style="border: 1px solid #d1d5db; padding: 8px; text-align: left;">Código de Barras</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${orderList.map(item => `
+                            <tr>
+                                <td style="border: 1px solid #d1d5db; padding: 8px;">${item.quantity}</td>
+                                <td style="border: 1px solid #d1d5db; padding: 8px;">${item.description}</td>
+                                <td style="border: 1px solid #d1d5db; padding: 8px;">${item.barcode}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <p style="margin-top: 20px; font-weight: bold;">Total de productos: ${totalItems}</p>
+            `;
+            
+            const content = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${htmlContent}</body></html>`;
+            const converted = htmlDocx.asBlob(content);
+            downloadFile('pedido.docx', converted, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        }
+
+        function exportToExcel() {
+            if(orderList.length === 0) return;
+            
+            // Crear contenido CSV para Excel
+            let csvContent = '\uFEFF'; // BOM para UTF-8
+            
+            // Información del pedido
+            csvContent += `Lista de Pedido\n`;
+            csvContent += `Fecha,${new Date().toLocaleDateString('es-ES')}\n`;
+            
+            // Información del proveedor
+            if (currentProvider.name) {
+                csvContent += `Proveedor,${currentProvider.name}\n`;
+                if (currentProvider.contact) {
+                    csvContent += `Contacto,${currentProvider.contact}\n`;
+                }
+            }
+            csvContent += `\n`; // Línea en blanco
+            
+            // Encabezados de la tabla
+            csvContent += 'Cantidad,Descripción,Código de Barras\n';
+            
+            // Datos de los productos
+            orderList.forEach(item => {
+                csvContent += `${item.quantity},"${item.description}","${item.barcode}"\n`;
+            });
+            
+            // Agregar total
+            const totalItems = orderList.reduce((sum, item) => sum + item.quantity, 0);
+            csvContent += `\nTotal de productos,${totalItems},`;
+            
+            downloadFile('pedido.xlsx', csvContent, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        }
+
+        // --- Asignación de Eventos Iniciales ---
+        
+        // MODIFICACIÓN: Se elimina la lógica dinámica del teclado.
+        // El input ahora siempre usará el teclado de texto definido en el HTML.
+        searchInput.addEventListener('input', handleSearch);
+
+        scanButton.addEventListener('click', startScanner);
+        closeScannerBtn.addEventListener('click', stopScanner);
+
+        // Event listeners para el historial
+        document.getElementById('show-history-btn').addEventListener('click', () => {
+            historySection.classList.remove('hidden');
+            renderHistoryList();
+        });
+
+        document.getElementById('toggle-history-btn').addEventListener('click', toggleHistorySection);
+        document.getElementById('clear-history-btn').addEventListener('click', clearAllHistory);
+        document.getElementById('save-order-btn').addEventListener('click', saveCurrentOrder);
+        document.getElementById('clear-order-btn').addEventListener('click', clearCurrentOrder);
+        document.getElementById('save-provider-btn').addEventListener('click', saveCurrentProvider);
+
+        // Event listeners para el menú de exportación
+        exportDropdownBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleExportDropdown();
+        });
+
+        document.getElementById('export-pdf').addEventListener('click', () => handleExportClick('pdf'));
+        document.getElementById('export-excel').addEventListener('click', () => handleExportClick('excel'));
+        document.getElementById('export-doc').addEventListener('click', () => handleExportClick('word'));
+
+        // Cerrar menú al hacer clic fuera
+        document.addEventListener('click', (e) => {
+            if (!exportDropdownBtn.contains(e.target) && !exportDropdown.contains(e.target)) {
+                hideExportDropdown();
+            }
+        });
+
+    </script>
+</body>
+</html>
