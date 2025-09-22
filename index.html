@@ -167,6 +167,7 @@
         let orderList = [];
         let orderHistory = [];
         let currentProvider = { name: '', contact: '' };
+        let restoredOrderInfo = null; // Para guardar la info del pedido restaurado
         let providerHistory = [];
         const { jsPDF } = window.jspdf;
         let html5QrCode;
@@ -473,7 +474,10 @@
                 return;
             }
 
-            const orderName = prompt('Nombre del pedido:', `Pedido ${new Date().toLocaleDateString()}`);
+            // Sugerir el nombre del pedido restaurado si existe, si no, uno nuevo.
+            const defaultOrderName = restoredOrderInfo ? restoredOrderInfo.name : `Pedido ${new Date().toLocaleDateString()}`;
+            const orderName = prompt('Nombre del pedido:', defaultOrderName);
+
             if (!orderName) return;
 
             const newOrder = {
@@ -483,6 +487,9 @@
                 items: [...orderList],
                 provider: { ...currentProvider }
             };
+
+            const wasRestored = !!restoredOrderInfo;
+            restoredOrderInfo = null; // Limpiar la info del pedido restaurado
 
             // Eliminar pedidos anteriores del mismo proveedor y día
             const removedCount = removeOldOrdersFromSameProviderAndDay(currentProvider.name, newOrder.date);
@@ -505,6 +512,10 @@
             }
             
             alert(message);
+
+            if (wasRestored) {
+                resetToInitialState();
+            }
         }
 
         function renderHistoryList() {
@@ -567,6 +578,9 @@
         function restoreOrder(orderId) {
             const order = orderHistory.find(o => o.id === orderId);
             if (!order) return;
+
+            // Guardar la información del pedido que se está restaurando
+            restoredOrderInfo = { name: order.name };
 
             // Si ya hay productos en el pedido actual, agregar al pedido existente
             if (orderList.length > 0) {
@@ -647,6 +661,25 @@
                 
                 alert('✅ Historial borrado exitosamente.\n\nTodos los pedidos guardados han sido eliminados.');
             }
+        }
+
+        function resetToInitialState() {
+            // Limpiar datos
+            orderList = [];
+            clearProvider();
+            restoredOrderInfo = null;
+
+            // Actualizar UI
+            renderOrderList(); // Esto ocultará la sección del pedido
+            searchSection.classList.add('hidden');
+            historySection.classList.add('hidden');
+            providerSection.classList.remove('hidden');
+
+            // Limpiar resultados de búsqueda y campo de texto
+            searchInput.value = '';
+            resultText.innerHTML = `<p class="text-gray-500 text-center text-sm">Aquí se mostrará el resultado de la búsqueda.</p>`;
+            resultSection.className = 'mt-6 p-6 bg-gray-50 rounded-lg min-h-[100px] flex items-center justify-center';
+            providerNameInput.focus();
         }
 
         // --- Lógica de Proveedores ---
@@ -1023,4 +1056,3 @@
     </script>
 </body>
 </html>
-
