@@ -1,0 +1,46 @@
+# Nombre del workflow que verás en la pestaña "Actions"
+name: Actualizar CSV desde Google Drive
+
+# Define cuándo se ejecutará la automatización
+on:
+  # A las 00:00 UTC (horario universal) de cada día
+  schedule:
+    - cron: '0 0 * * *'
+
+  # Permite ejecutarlo manualmente para hacer pruebas
+  workflow_dispatch:
+
+# Define las tareas a realizar
+jobs:
+  actualizar-fichero-csv:
+    # La automatización se ejecutará en un servidor virtual con Ubuntu
+    runs-on: ubuntu-latest
+
+    # Permisos para que la acción pueda escribir en tu repositorio
+    permissions:
+      contents: write
+
+    # Pasos que se seguirán
+    steps:
+      # 1. Descarga el código de tu repositorio al servidor virtual
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      # 2. Descarga el nuevo fichero desde Google Drive y lo reemplaza
+      - name: Descargar datos.csv desde Google Drive
+        run: |
+          # Usamos curl para descargar el fichero del enlace directo
+          # La opción -L sigue las redirecciones y -o guarda el contenido en el fichero datos.csv
+          curl -L "https://drive.google.com/uc?export=download&id=13tpvR7VdY_iEQ6MPiUo3_25o0cJYubGX" -o datos.csv
+          echo "Fichero datos.csv descargado y actualizado."
+
+      # 3. Sube los cambios automáticamente a tu repositorio
+      - name: Hacer commit y push de los cambios
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          # Mensaje del commit que verás en el historial
+          commit_message: '🤖 Auto: Actualización diaria de datos.csv'
+          # El fichero que se va a subir. En este caso, datos.csv
+          file_pattern: datos.csv
+          commit_user_name: GitHub Actions Bot
+          commit_user_email: actions@github.com
