@@ -247,15 +247,26 @@
             }
         }
 
-        function parseCSV(csvText) {
+        function parseCSV(csvText) { // <-- FUNCIÓN MEJORADA
             productData = [];
             const lines = csvText.split(/\r\n|\n/);
-            const startIndex = lines[0].toLowerCase().includes('descripcion') ? 1 : 0;
+            if (lines.length === 0) return;
+
+            // Detectar delimitador (coma o punto y coma)
+            const firstLine = lines[0];
+            const delimiter = firstLine.includes(';') ? ';' : ',';
+
+            // Detectar y saltar la cabecera si existe
+            const hasHeader = firstLine.toLowerCase().includes('descripcion') || firstLine.toLowerCase().includes('barras');
+            const startIndex = hasHeader ? 1 : 0;
 
             for (let i = startIndex; i < lines.length; i++) {
-                if (lines[i].trim() === '') continue;
-                const parts = lines[i].split(';');
+                const line = lines[i].trim();
+                if (line === '') continue;
+
+                const parts = line.split(delimiter);
                 if (parts.length >= 2) {
+                    // Limpiar comillas y espacios en blanco de cada parte
                     const description = parts[0].trim().replace(/"/g, '');
                     const barcode = parts[1].trim().replace(/"/g, '');
                     if (description && barcode) {
@@ -416,6 +427,9 @@
                     renderOrderList();
                 });
             });
+            // La lógica de los event listeners se mueve a un manejador centralizado (handleOrderListClick)
+            // para usar delegación de eventos y mejorar el rendimiento.
+        }
 
             document.querySelectorAll('.decrease-qty-btn').forEach(button => {
                 button.addEventListener('click', (e) => {
@@ -427,6 +441,10 @@
                     renderOrderList();
                 });
             });
+        // --- NUEVO: Manejador centralizado para la lista de pedidos ---
+        function handleOrderListClick(e) {
+            const target = e.target;
+            const index = parseInt(target.dataset.index);
 
             document.querySelectorAll('.quantity-in-list').forEach(input => {
                 input.addEventListener('change', (e) => {
@@ -440,6 +458,7 @@
                     renderOrderList();
                 });
             });
+            if (isNaN(index)) return; // Salir si no se hizo clic en un elemento con data-index
 
             document.querySelectorAll('.remove-item-btn').forEach(button => {
                 button.addEventListener('click', (e) => {
@@ -447,6 +466,33 @@
                     renderOrderList();
                 });
             });
+            if (target.matches('.increase-qty-btn')) {
+                orderList[index].quantity++;
+                renderOrderList();
+            } else if (target.matches('.decrease-qty-btn')) {
+                orderList[index].quantity--;
+                if (orderList[index].quantity <= 0) {
+                    orderList.splice(index, 1);
+                }
+                renderOrderList();
+            } else if (target.matches('.remove-item-btn')) {
+                orderList.splice(index, 1);
+                renderOrderList();
+            }
+        }
+
+        function handleOrderListChange(e) {
+            const target = e.target;
+            if (target.matches('.quantity-in-list')) {
+                const index = parseInt(target.dataset.index);
+                const newQuantity = parseInt(target.value, 10);
+                if (newQuantity > 0) {
+                    orderList[index].quantity = newQuantity;
+                } else {
+                    orderList.splice(index, 1);
+                }
+                renderOrderList();
+            }
         }
 
         // --- Lógica del Historial de Pedidos ---
@@ -1020,6 +1066,10 @@
         // MODIFICACIÓN: Se elimina la lógica dinámica del teclado.
         // El input ahora siempre usará el teclado de texto definido en el HTML.
         searchInput.addEventListener('input', handleSearch);
+
+        // NUEVO: Listeners centralizados para la lista de pedidos (delegación de eventos)
+        orderListElement.addEventListener('click', handleOrderListClick);
+        orderListElement.addEventListener('change', handleOrderListChange);
 
         scanButton.addEventListener('click', startScanner);
         closeScannerBtn.addEventListener('click', stopScanner);
