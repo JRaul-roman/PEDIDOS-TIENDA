@@ -77,7 +77,7 @@
             </div>
             <div>
                 <label for="search-input" class="block text-sm font-medium text-gray-600 mb-1">Buscar por Descripción o Código de Barras</label>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-3">
                     <!-- MODIFICACIÓN: Se establece inputmode="text" para un teclado de texto general -->
                     <input type="search" inputmode="text" id="search-input" placeholder="Escribe una descripción, código o escanea..." class="flex-grow w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-sm">
                     <button id="scan-button" class="p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors" title="Escanear código de barras">
@@ -93,8 +93,8 @@
 
         <div id="order-section" class="hidden mt-8">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-bold text-gray-800">Lista de Pedido</h2>
-                <div class="flex gap-2">
+                <h2 class="text-lg font-bold text-gray-800 flex-shrink-0">Lista de Pedido</h2>
+                <div class="flex flex-wrap justify-end gap-2">
                     <button id="save-order-btn" class="bg-blue-600 text-white font-semibold py-1 px-3 rounded-lg hover:bg-blue-700 transition-colors text-sm">Guardar Pedido</button>
                     <button id="print-order-btn" class="bg-sky-600 text-white font-semibold py-1 px-3 rounded-lg hover:bg-sky-700 transition-colors text-sm">
                         Imprimir
@@ -392,12 +392,12 @@
                 li.className = 'p-4 flex justify-between items-center list-item-animation text-sm';
                 li.innerHTML = `
                     <div class="flex-grow pr-4">
-                        <span class="text-gray-700">${item.description}</span>
+                        <span class="text-gray-800 font-medium">${item.description}</span>
                     </div>
-                    <div class="flex items-center gap-2 flex-shrink-0">
-                        <button data-index="${index}" class="decrease-qty-btn bg-gray-200 text-gray-700 w-7 h-7 rounded-full font-bold hover:bg-gray-300 transition">-</button>
-                        <input type="number" value="${item.quantity}" min="1" data-index="${index}" class="quantity-in-list w-16 text-center border border-gray-300 rounded-md py-1">
-                        <button data-index="${index}" class="increase-qty-btn bg-gray-200 text-gray-700 w-7 h-7 rounded-full font-bold hover:bg-gray-300 transition">+</button>
+                    <div class="flex items-center gap-3 flex-shrink-0">
+                        <button data-index="${index}" class="decrease-qty-btn bg-gray-200 text-gray-700 w-8 h-8 rounded-full font-bold hover:bg-gray-300 transition text-lg">-</button>
+                        <input type="number" value="${item.quantity}" min="1" data-index="${index}" class="quantity-in-list w-16 text-center border border-gray-300 rounded-md py-1 text-base">
+                        <button data-index="${index}" class="increase-qty-btn bg-gray-200 text-gray-700 w-8 h-8 rounded-full font-bold hover:bg-gray-300 transition text-lg">+</button>
                         <button data-index="${index}" class="remove-item-btn text-red-500 hover:text-red-700 ml-2 font-semibold text-lg">X</button>
                     </div>`;
                 orderListElement.appendChild(li);
@@ -530,11 +530,11 @@
                             <p class="text-xs text-gray-600 mt-1">${totalItems} productos</p>
                             ${providerInfo}
                         </div>
-                        <div class="flex gap-1 ml-4">
-                            <button class="restore-order-btn bg-green-600 text-white text-xs px-2 py-1 rounded hover:bg-green-700 transition-colors" data-id="${order.id}" title="Restaurar pedido">
+                        <div class="flex flex-col sm:flex-row gap-2 ml-4 flex-shrink-0 w-24 sm:w-auto">
+                            <button class="restore-order-btn bg-green-600 text-white text-xs font-semibold px-2 py-2 sm:py-1 rounded-md hover:bg-green-700 transition-colors" data-id="${order.id}" title="Restaurar pedido">
                                 Restaurar
                             </button>
-                            <button class="delete-order-btn bg-red-600 text-white text-xs px-2 py-1 rounded hover:bg-red-700 transition-colors" data-id="${order.id}" title="Eliminar pedido">
+                            <button class="delete-order-btn bg-red-600 text-white text-xs font-semibold px-2 py-2 sm:py-1 rounded-md hover:bg-red-700 transition-colors" data-id="${order.id}" title="Eliminar pedido">
                                 Eliminar
                             </button>
                         </div>
