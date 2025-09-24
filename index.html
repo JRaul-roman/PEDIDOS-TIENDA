@@ -940,12 +940,25 @@
             doc.setFont(undefined, 'normal');
             addOrderItemsToDocument(doc, tableStartY + 10);
             
-            // Generar el PDF como un Blob
+            // --- MÉTODO DE IMPRESIÓN ROBUSTO ---
+            // Generar el PDF como un Blob (un tipo de objeto de archivo)
             const pdfBlob = doc.output('blob');
-            // Crear una URL para el Blob, que es más compatible con móviles
+            
+            // Crear una URL temporal para el Blob
             const url = URL.createObjectURL(pdfBlob);
-            // Abrir la URL en una nueva pestaña
-            window.open(url, '_blank');
+
+            // Crear un iframe invisible para cargar el PDF
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = url;
+            document.body.appendChild(iframe);
+
+            // Esperar a que el PDF se cargue en el iframe y luego abrir el diálogo de impresión
+            iframe.onload = () => {
+                iframe.contentWindow.print();
+                // Opcional: remover el iframe después de un tiempo
+                setTimeout(() => document.body.removeChild(iframe), 1000);
+            };
         }
 
         function exportToWord() {
