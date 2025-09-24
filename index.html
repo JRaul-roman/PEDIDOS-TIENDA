@@ -940,7 +940,12 @@
             doc.setFont(undefined, 'normal');
             addOrderItemsToDocument(doc, tableStartY + 10);
             
-            doc.output('dataurlnewwindow');
+            // Generar el PDF como un Blob
+            const pdfBlob = doc.output('blob');
+            // Crear una URL para el Blob, que es más compatible con móviles
+            const url = URL.createObjectURL(pdfBlob);
+            // Abrir la URL en una nueva pestaña
+            window.open(url, '_blank');
         }
 
         function exportToWord() {
