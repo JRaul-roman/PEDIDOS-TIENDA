@@ -940,28 +940,10 @@
             doc.setFont(undefined, 'normal');
             addOrderItemsToDocument(doc, tableStartY + 10);
             
-            // --- MÉTODO DE IMPRESIÓN DEFINITIVO (iframe + autoPrint) ---
-            
-            // 1. Añadir la instrucción de auto-impresión al PDF.
-            doc.autoPrint();
-
-            // 2. Generar el PDF como un 'blob' (un objeto de archivo binario).
-            const pdfBlob = doc.output('blob');
-            
-            // 3. Crear una URL temporal para ese blob.
-            const url = URL.createObjectURL(pdfBlob);
-
-            // 4. Crear un iframe invisible para cargar el PDF.
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none'; // Ocultarlo
-            iframe.src = url;
-            document.body.appendChild(iframe);
-
-            // 5. Esperar a que el PDF se cargue en el iframe y luego abrir el diálogo de impresión.
-            // Esto, junto con autoPrint, cubre la mayoría de los casos.
-            iframe.onload = function() {
-                setTimeout(() => iframe.contentWindow.print(), 100);
-            };
+            // --- MÉTODO DE IMPRESIÓN MÁS FIABLE (Descarga directa) ---
+            // Esto descarga el archivo, que el usuario puede abrir e imprimir.
+            // Es la solución más compatible para todos los dispositivos.
+            doc.save('pedido_para_imprimir.pdf');
         }
 
         function exportToWord() {
