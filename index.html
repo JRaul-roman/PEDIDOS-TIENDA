@@ -940,11 +940,27 @@
             doc.setFont(undefined, 'normal');
             addOrderItemsToDocument(doc, tableStartY + 10);
             
-            // --- MÉTODO DE IMPRESIÓN DEFINITIVO ---
-            // Añade un script al PDF para que se imprima automáticamente al abrirse.
-            doc.autoPrint();
-            // Abre el PDF en una nueva ventana. El script autoPrint se encargará de mostrar el diálogo de impresión.
-            doc.output('dataurlnewwindow');
+            // --- MÉTODO DE IMPRESIÓN MÁS COMPATIBLE (usando iframe) ---
+            
+            // 1. Generar el PDF como un 'blob' (un objeto de archivo binario).
+            const pdfBlob = doc.output('blob');
+            
+            // 2. Crear una URL temporal para ese blob.
+            const url = URL.createObjectURL(pdfBlob);
+
+            // 3. Crear un iframe invisible para cargar el PDF.
+            const iframe = document.createElement('iframe');
+            iframe.style.position = 'fixed';
+            iframe.style.width = '0';
+            iframe.style.height = '0';
+            iframe.style.border = 'none';
+            iframe.src = url;
+            document.body.appendChild(iframe);
+
+            // 4. Esperar a que el PDF se cargue en el iframe y luego abrir el diálogo de impresión.
+            iframe.onload = function() {
+                iframe.contentWindow.print();
+            };
         }
 
         function exportToWord() {
