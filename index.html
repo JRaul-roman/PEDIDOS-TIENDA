@@ -325,8 +325,8 @@
                 const quantity = parseInt(quantityInput.value, 10);
                 if (quantity > 0) {
                     addToOrder(product, quantity);
-                    resultText.innerHTML = `<p class="text-gray-500 text-center text-sm">Producto añadido. Busca o escanea el siguiente.</p>`;
-                    resultSection.className = 'mt-6 p-6 bg-gray-50 rounded-lg';
+                    resultText.innerHTML = `<p class="text-gray-500 text-center text-sm">Aquí se mostrará el resultado de la búsqueda.</p>`;
+                    resultSection.className = 'mt-6 p-6 bg-gray-50 rounded-lg min-h-[100px] flex items-center justify-center';
                     searchInput.value = '';
                     searchInput.focus();
                 }
@@ -835,7 +835,7 @@
             const doc = new jsPDF();
             
             // Título
-            doc.setFontSize(16);
+            doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
             doc.text("Lista de Pedido", 20, 20);
             
@@ -857,7 +857,7 @@
             doc.line(20, lineY, 190, lineY);
             
             // Encabezados de tabla
-            doc.setFontSize(12);
+            doc.setFontSize(10);
             doc.setFont(undefined, 'bold');
             const tableStartY = lineY + 10;
             doc.text("Cantidad", 20, tableStartY);
@@ -868,7 +868,7 @@
             doc.line(20, tableStartY + 3, 190, tableStartY + 3);
             
             // Contenido de la tabla
-            doc.setFontSize(10);
+            doc.setFontSize(8);
             doc.setFont(undefined, 'normal');
             let yPosition = tableStartY + 10;
             
@@ -881,7 +881,7 @@
                 doc.text(item.quantity.toString(), 20, yPosition);
                 doc.text(item.description, 50, yPosition);
                 doc.text(item.barcode, 150, yPosition);
-                yPosition += 8;
+                yPosition += 4;
             });
             
             // Total de productos
