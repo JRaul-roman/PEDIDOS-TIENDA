@@ -96,6 +96,9 @@
                 <h2 class="text-lg font-bold text-gray-800">Lista de Pedido</h2>
                 <div class="flex gap-2">
                     <button id="save-order-btn" class="bg-blue-600 text-white font-semibold py-1 px-3 rounded-lg hover:bg-blue-700 transition-colors text-sm">Guardar Pedido</button>
+                    <button id="print-order-btn" class="bg-sky-600 text-white font-semibold py-1 px-3 rounded-lg hover:bg-sky-700 transition-colors text-sm">
+                        Imprimir
+                    </button>
                     <div class="relative">
                         <button id="export-dropdown-btn" class="bg-green-600 text-white font-semibold py-1 px-3 rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-1">
                             Exportar Como
@@ -828,6 +831,27 @@
             a.click();
             document.body.removeChild(a);
         }
+        
+        function addOrderItemsToDocument(doc, startY) {
+            let yPosition = startY;
+            
+            orderList.forEach((item, i) => {
+                if (yPosition > 280) { // Salto de página si es necesario
+                    doc.addPage();
+                    yPosition = 20;
+                }
+                
+                doc.text(item.quantity.toString(), 20, yPosition);
+                doc.text(item.description, 50, yPosition);
+                doc.text(item.barcode, 150, yPosition);
+                yPosition += 4;
+            });
+            
+            // Total de productos
+            const totalItems = orderList.reduce((sum, item) => sum + item.quantity, 0);
+            doc.setFont(undefined, 'bold');
+            doc.text(`Total de productos: ${totalItems}`, 20, yPosition + 10);
+        }
 
 
         function exportToPDF() {
@@ -870,26 +894,53 @@
             // Contenido de la tabla
             doc.setFontSize(8);
             doc.setFont(undefined, 'normal');
-            let yPosition = tableStartY + 10;
-            
-            orderList.forEach((item, i) => {
-                if (yPosition > 280) {
-                    doc.addPage();
-                    yPosition = 20;
-                }
-                
-                doc.text(item.quantity.toString(), 20, yPosition);
-                doc.text(item.description, 50, yPosition);
-                doc.text(item.barcode, 150, yPosition);
-                yPosition += 4;
-            });
-            
-            // Total de productos
-            const totalItems = orderList.reduce((sum, item) => sum + item.quantity, 0);
-            doc.setFont(undefined, 'bold');
-            doc.text(`Total de productos: ${totalItems}`, 20, yPosition + 10);
+            addOrderItemsToDocument(doc, tableStartY + 10);
             
             doc.save("pedido.pdf");
+        }
+
+        function printOrder() {
+            if(orderList.length === 0) {
+                alert('No hay productos en el pedido para imprimir.');
+                return;
+            }
+            const doc = new jsPDF();
+            
+            // Título
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.text("Lista de Pedido", 20, 20);
+            
+            // Fecha
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Fecha: ${new Date().toLocaleDateString('es-ES')}`, 20, 30);
+            
+            // Información del proveedor
+            if (currentProvider.name) {
+                doc.text(`Proveedor: ${currentProvider.name}`, 20, 35);
+                if (currentProvider.contact) {
+                    doc.text(`Contacto: ${currentProvider.contact}`, 20, 40);
+                }
+            }
+            
+            // Línea separadora y encabezados
+            const lineY = currentProvider.name ? 45 : 35;
+            doc.line(20, lineY, 190, lineY);
+            const tableStartY = lineY + 10;
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'bold');
+            doc.text("Cantidad", 20, tableStartY);
+            doc.text("Descripción", 50, tableStartY);
+            doc.text("Código", 150, tableStartY);
+            doc.line(20, tableStartY + 3, 190, tableStartY + 3);
+            
+            // Contenido y total
+            doc.setFontSize(8);
+            doc.setFont(undefined, 'normal');
+            addOrderItemsToDocument(doc, tableStartY + 10);
+            
+            doc.output('dataurlnewwindow');
         }
 
         function exportToWord() {
@@ -987,6 +1038,7 @@
         document.getElementById('toggle-history-btn').addEventListener('click', toggleHistorySection);
         document.getElementById('clear-history-btn').addEventListener('click', clearAllHistory);
         document.getElementById('save-order-btn').addEventListener('click', saveCurrentOrder);
+        document.getElementById('print-order-btn').addEventListener('click', printOrder);
         document.getElementById('clear-order-btn').addEventListener('click', clearCurrentOrder);
         document.getElementById('save-provider-btn').addEventListener('click', saveCurrentProvider);
 
