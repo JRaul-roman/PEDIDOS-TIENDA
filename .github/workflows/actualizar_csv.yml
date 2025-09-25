@@ -31,7 +31,7 @@ jobs:
         run: |
           # Usamos curl para descargar el fichero del enlace directo
           # La opción -L sigue las redirecciones y -o guarda el contenido en el fichero barras.csv
-          curl -L "https://drive.google.com/uc?export=download&id=13tpvR7VdY_iEQ6MPiUo3_25o0cJYubGX" -o barras.csv
+          curl -L "https://drive.google.com/uc?export=download&id=1697trRdXQmPU697NiW_TKs_AbHpilQZH" -o barras.csv
           echo "Fichero barras.csv descargado y actualizado."
 
       # 3. Sube los cambios automáticamente a tu repositorio
