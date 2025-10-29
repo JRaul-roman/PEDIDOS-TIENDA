@@ -204,17 +204,16 @@
         });
 
         async function loadRemoteFile() {
-            fileStatus.textContent = 'Cargando desde GitHub...';
+            fileStatus.textContent = 'Cargando datos de productos...';
             fileStatus.className = 'text-center text-sm text-blue-600 font-medium h-5';
 
             try {
-                // Usamos un proxy para evitar problemas de CORS al abrir el archivo localmente
+                // Al estar en GitHub Pages, ya no necesitamos el proxy. Apuntamos directamente al archivo.
                 const githubRawUrl = 'https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/main/barras.csv';
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(githubRawUrl)}`;
                 
-                const response = await fetch(proxyUrl);
+                const response = await fetch(githubRawUrl); // Petición directa
                 if (!response.ok) {
-                    throw new Error(`Error al cargar el archivo desde GitHub: ${response.statusText}`);
+                    throw new Error(`Error al cargar el archivo: ${response.statusText}`);
                 }
                 const csvText = await response.text();
                 parseCSV(csvText);
@@ -225,8 +224,8 @@
                 document.getElementById('upload-section').classList.add('hidden');
                 providerNameInput.focus();
             } catch (error) {
-                console.error('Fallo al cargar el archivo desde GitHub:', error);
-                fileStatus.textContent = 'Fallo al cargar desde GitHub. Asegúrate de que el archivo es público y la URL es correcta.';
+                console.error('Fallo al cargar el archivo:', error);
+                fileStatus.textContent = 'Fallo al cargar los datos. Revisa la conexión o la URL del archivo.';
                 fileStatus.className = 'text-center text-sm text-red-600 font-medium h-5';
             }
         }
