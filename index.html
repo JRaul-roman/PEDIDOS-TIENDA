@@ -543,13 +543,13 @@
             const order = orderHistory.find(o => o.id === orderId);
             if (!order) return;
 
-            // Si ya hay productos en el pedido actual, agregar al pedido existente
-            if (orderList.length > 0) {
-                addOrderItemsToCurrentOrder(order.items);
-            } else {
-                // Si no hay productos, cargar el pedido completo
-                orderList = [...order.items];
+            // Si hay un pedido en curso, preguntar antes de reemplazarlo.
+            if (orderList.length > 0 && !confirm('¿Deseas reemplazar el pedido actual con el pedido del historial? Se perderán los cambios no guardados.')) {
+                return; // El usuario canceló la acción
             }
+
+            // Reemplazar la lista de pedido actual con la del historial.
+            orderList = [...order.items];
             
             // Restaurar información del proveedor si existe
             if (order.provider && order.provider.name) {
