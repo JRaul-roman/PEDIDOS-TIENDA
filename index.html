@@ -36,7 +36,8 @@
     <div class="w-full max-w-2xl mx-auto bg-white rounded-2xl shadow-lg p-6 md:p-8">
         
         <header class="text-center mb-6">
-            <h1 class="text-4xl md:text-5xl font-bold tracking-tight bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">PEDIDOS</h1>
+            <h1 class="text-xl md:text-2xl font-bold text-gray-900">Buscador de Productos</h1>
+            <p class="text-sm text-gray-500 mt-1">Cargando lista de productos desde Google Drive...</p>
         </header>
 
         <div id="upload-section" class="mb-6">
@@ -46,17 +47,18 @@
             </div>
         </div>
 
-        <!-- DATOS DEL PROVEEDOR -->
+        <!-- Paso 2: Información del Proveedor -->
         <div id="provider-section" class="hidden mb-6">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="text-base font-semibold text-gray-700">DATOS DEL PROVEEDOR</h2>
+                <h2 class="text-base font-semibold text-gray-700">Paso 2: Información del Proveedor</h2>
                 <button id="show-history-btn" class="bg-purple-600 text-white font-semibold py-1 px-3 rounded-lg hover:bg-purple-700 transition-colors text-sm">Historial Pedidos</button>
             </div>
             <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <div class="flex flex-col sm:flex-row gap-3">
-                    <div class="flex-grow">
+                    <div class="flex-grow relative">
                         <label for="provider-name" class="block text-sm font-medium text-gray-600 mb-1">Nombre del Proveedor</label>
-                        <input type="text" id="provider-name" placeholder="Ej: Distribuidora ABC" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                        <input type="text" id="provider-name" placeholder="Ej: Distribuidora ABC" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" autocomplete="off">
+                        <div id="provider-suggestions" class="hidden absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"></div>
                     </div>
                     <div class="flex-grow">
                         <label for="provider-contact" class="block text-sm font-medium text-gray-600 mb-1">Contacto</label>
@@ -198,26 +200,45 @@
         // --- Lógica de Carga Automática ---
         
         document.addEventListener('DOMContentLoaded', () => {
-            loadLocalFile();
+            loadDefaultGDriveFile();
             loadOrderHistory();
             loadProviderHistory();
         });
 
-        async function loadLocalFile() {
-            fileStatus.textContent = 'Cargando desde GitHub...';
+        async function loadDefaultGDriveFile() {
+            const fileId = '1VnXlnnKn_RAy3VGp_jXj44_39-SzgjH4';
+            const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+            
+            fileStatus.textContent = 'Cargando desde Google Drive...';
             fileStatus.className = 'text-center text-sm text-blue-600 font-medium h-5';
 
-            try {
-                const response = await fetch('https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/main/barras.csv');
-                if (!response.ok) {
-                    throw new Error(`Error al cargar el archivo desde GitHub: ${response.statusText}`);
+            const proxies = [
+                `https://corsproxy.io/?${encodeURIComponent(downloadUrl)}`,
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(downloadUrl)}`,
+                `https://thingproxy.freeboard.io/fetch/${downloadUrl}`
+            ];
+
+            let success = false;
+            for (const proxyUrl of proxies) {
+                try {
+                    console.log(`Intentando con el proxy: ${proxyUrl}`);
+                    const response = await fetch(proxyUrl);
+                    if (!response.ok) {
+                        throw new Error(`Error en la respuesta del proxy: ${response.statusText}`);
+                    }
+                    const csvText = await response.text();
+                    parseCSV(csvText);
+                    success = true;
+                    console.log(`Carga exitosa con: ${proxyUrl}`);
+                    break;
+                } catch (error) {
+                    console.error(`Fallo al usar el proxy ${proxyUrl}:`, error);
                 }
-                const csvText = await response.text();
-                parseCSV(csvText);
-                console.log('Carga exitosa de barras.csv desde GitHub');
-            } catch (error) {
-                console.error('Fallo al cargar el archivo desde GitHub:', error);
-                fileStatus.textContent = 'Fallo al cargar desde GitHub. Asegúrate de que el archivo es público y la URL es correcta.';
+            }
+
+            if (!success) {
+                console.error('Todos los proxies fallaron.');
+                fileStatus.textContent = 'Fallo al cargar desde Drive. No se pudo establecer conexión.';
                 fileStatus.className = 'text-center text-sm text-red-600 font-medium h-5';
             }
         }
@@ -449,7 +470,11 @@
                 return;
             }
 
-            const orderName = prompt('Nombre del pedido:', `Pedido ${new Date().toLocaleDateString()}`);
+            const defaultName = currentProvider.name 
+                ? `Pedido ${currentProvider.name} - ${new Date().toLocaleDateString('es-ES')}`
+                : `Pedido ${new Date().toLocaleDateString('es-ES')}`;
+            
+            const orderName = prompt('Nombre del pedido:', defaultName);
             if (!orderName) return;
 
             const newOrder = {
@@ -460,27 +485,98 @@
                 provider: { ...currentProvider }
             };
 
-            // Eliminar pedidos anteriores del mismo proveedor y día
+            // --- Guardado en Historial Local (sin cambios) ---
             const removedCount = removeOldOrdersFromSameProviderAndDay(currentProvider.name, newOrder.date);
-
             orderHistory.unshift(newOrder);
-            
-            // Mantener solo los últimos 20 pedidos
             if (orderHistory.length > 20) {
                 orderHistory = orderHistory.slice(0, 20);
             }
-
             saveOrderHistory();
             renderHistoryList();
             
+            // --- NUEVO: Generar y descargar archivo HTML ---
+            generateAndDownloadOrderFile(newOrder);
+            
+            // --- Mensaje de confirmación ---
             const providerInfo = currentProvider.name ? ` para ${currentProvider.name}` : '';
             let message = `Pedido "${orderName}" guardado exitosamente${providerInfo}.`;
-            
             if (removedCount > 0) {
                 message += `\n\n🧹 Se eliminaron ${removedCount} pedido(s) anterior(es) del mismo proveedor y día.`;
             }
             
-            alert(message);
+            alert(message + '\n\nSe iniciará la descarga del archivo del pedido.');
+        }
+
+        function generateAndDownloadOrderFile(order) {
+            const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+            const orderDate = new Date(order.date).toLocaleString('es-ES');
+
+            const providerHtml = order.provider.name 
+                ? `
+                <div style="margin-bottom: 15px; padding: 10px; background-color: #f3f4f6; border-left: 4px solid #3b82f6; color: #1f2937;">
+                    <h2 style="margin: 0; font-size: 1.1em;">Proveedor: ${order.provider.name}</h2>
+                    ${order.provider.contact ? `<p style="margin: 5px 0 0;">Contacto: ${order.provider.contact}</p>` : ''}
+                </div>`
+                : '';
+
+            let itemsHtml = order.items.map(item => `
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">${item.quantity}</td>
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">${item.description}</td>
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">${item.barcode}</td>
+                </tr>
+            `).join('');
+
+            const content = `
+                <!DOCTYPE html>
+                <html lang="es">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>${order.name}</title>
+                    <style>
+                        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 40px; background-color: #f9fafb; color: #111827; }
+                        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                        h1 { color: #1d4ed8; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #ddd; }
+                        th { background-color: #f1f5f9; }
+                        tr:nth-child(even) { background-color: #f8fafc; }
+                        .footer { margin-top: 20px; font-weight: bold; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <h1>${order.name}</h1>
+                        <p>Fecha del pedido: ${orderDate}</p>
+                        ${providerHtml}
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Cantidad</th>
+                                    <th>Descripción</th>
+                                    <th>Código</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${itemsHtml}
+                            </tbody>
+                        </table>
+                        <div class="footer">
+                            <p>Total de productos distintos: ${order.items.length}</p>
+                            <p>Suma total de unidades: ${totalItems}</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `;
+            
+            const blob = new Blob([content], { type: 'text/html' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `${order.name.replace(/[/\\?%*:|"<>]/g, '-')}.html`; // Limpiar nombre de archivo
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
         }
 
         function renderHistoryList() {
