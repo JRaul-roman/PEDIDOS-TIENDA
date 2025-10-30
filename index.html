@@ -208,8 +208,8 @@
             fileStatus.className = 'text-center text-sm text-blue-600 font-medium h-5';
 
             try {
-                // Apuntamos a la URL "raw" de GitHub para obtener el contenido del CSV directamente.
-                const githubRawUrl = 'https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/0c621cb6b7af6659fc0dda7b88455db91e5ac81d/barras.csv';
+                // Apuntamos a la URL "raw" de GitHub para obtener siempre la última versión del CSV desde la rama principal.
+                const githubRawUrl = 'https://github.com/JRaul-roman/PEDIDOS-TIENDA/raw/refs/heads/main/barras.csv';
                 
                 const response = await fetch(githubRawUrl);
                 if (!response.ok) {
