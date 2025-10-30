@@ -208,10 +208,10 @@
             fileStatus.className = 'text-center text-sm text-blue-600 font-medium h-5';
 
             try {
-                // Al estar en GitHub Pages, ya no necesitamos el proxy. Apuntamos directamente al archivo.
-                const githubRawUrl = 'https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/main/barras.csv';
+                // Apuntamos a la URL "raw" de GitHub para obtener el contenido del CSV directamente.
+                const githubRawUrl = 'https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/0c621cb6b7af6659fc0dda7b88455db91e5ac81d/barras.csv';
                 
-                const response = await fetch(githubRawUrl); // Petición directa
+                const response = await fetch(githubRawUrl);
                 if (!response.ok) {
                     throw new Error(`Error al cargar el archivo: ${response.statusText}`);
                 }
