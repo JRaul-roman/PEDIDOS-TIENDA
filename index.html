@@ -212,7 +212,7 @@
             try {
                 // URL estándar y robusta para obtener el contenido crudo del archivo desde la rama principal.
                 // Intentar cargar desde la URL "raw" de GitHub
-                const githubRawUrl = 'https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/main/barras.csv';
+                const githubRawUrl = 'https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/refs/heads/main/barras.csv';
                 
                 const response = await fetch(githubRawUrl);
                 if (!response.ok) {
