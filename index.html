@@ -269,7 +269,7 @@
                 const parts = lines[i].split(';');
                 if (parts.length >= 2) {
                     const description = parts[0].trim().replace(/"/g, '');
-                    const barcode = parts[1].trim().replace(/"/g, '');
+                    const barcode = parts[1].trim().replace(/"/g, '').replace(',', '.');
                     if (description && barcode) {
                         productData.push({ description, barcode });
                     }
@@ -349,11 +349,11 @@
                     <p class="font-semibold mb-3 text-gray-700">Se encontraron ${products.length} resultados. Selecciona uno:</p>
                     <ul class="max-h-60 overflow-y-auto divide-y divide-gray-200 border border-gray-200 rounded-lg bg-white">`;
             
-            products.forEach(product => {
+            products.forEach((product, index) => {
                 resultsHtml += `
                     <li 
                         class="p-3 hover:bg-blue-50 cursor-pointer transition-colors duration-150" 
-                        data-barcode="${product.barcode}"
+                        data-index="${index}"
                     >
                         <strong class="block text-sm text-gray-800">${product.description}</strong>
                         <span class="text-xs text-gray-500">Código: ${product.barcode}</span>
@@ -364,10 +364,10 @@
             resultText.innerHTML = resultsHtml;
             resultSection.className = 'mt-6 p-6 bg-gray-50 rounded-lg';
 
-            resultSection.querySelectorAll('li[data-barcode]').forEach(item => {
+            resultSection.querySelectorAll('li[data-index]').forEach(item => {
                 item.addEventListener('click', () => {
-                    const barcode = item.dataset.barcode;
-                    const selectedProduct = productData.find(p => p.barcode === barcode);
+                    const index = parseInt(item.dataset.index, 10);
+                    const selectedProduct = products[index];
                     if (selectedProduct) {
                         displaySingleProduct(selectedProduct);
                     }
