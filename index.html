@@ -294,14 +294,10 @@
                 return;
             }
 
-            const barcodeMatch = productData.find(p => p.barcode === rawQuery);
+            const barcodeMatches = productData.filter(p => p.barcode.includes(rawQuery));
             const descriptionMatches = productData.filter(p => p.description.toLowerCase().includes(lowerCaseQuery));
             
-            const allMatches = [];
-            if (barcodeMatch) {
-                allMatches.push(barcodeMatch);
-            }
-            allMatches.push(...descriptionMatches);
+            const allMatches = [...barcodeMatches, ...descriptionMatches];
             
             const uniqueProducts = [...new Map(allMatches.map(item => [item.barcode, item])).values()];
 
