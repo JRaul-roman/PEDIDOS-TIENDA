@@ -209,52 +209,70 @@
 
             let loadedSuccessfully = false;
 
+            // 1) Intentar cargar `barras.json` local (preferencia: ya convertido a JSON)
             try {
-                // URL estándar y robusta para obtener el contenido crudo del archivo desde la rama principal.
-                // Intentar cargar desde la URL "raw" de GitHub
-                const githubRawUrl = 'https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/b81d215228987b7f7884f58da87e245b3f2b02c0/barras.csv';
-                
-                const response = await fetch(githubRawUrl);
-                if (!response.ok) {
-                    console.warn(`Fallo al cargar desde GitHub (${response.status} ${response.statusText}). Intentando carga local como alternativa...`);
-                    throw new Error('GITHUB_LOAD_FAILED'); // Lanzar un error específico para el catch
-                }
-                const csvText = await response.text();
-                parseCSV(csvText);
-                console.log('Carga exitosa de barras.csv desde GitHub.');
-                fileStatus.textContent = `¡Éxito! Se cargaron ${productData.length} productos desde GitHub.`;
-                fileStatus.className = 'text-center text-sm text-green-600 font-medium h-5';
-                loadedSuccessfully = true;
-            } catch (error) {
-                console.error('Error al cargar desde GitHub:', error);
-                fileStatus.textContent = 'Fallo al cargar desde GitHub. Intentando carga local...';
-                fileStatus.className = 'text-center text-sm text-orange-600 font-medium h-5';
-
-                // Si la carga de GitHub falló, intentar cargar el archivo localmente
-                try {
-                    const localResponse = await fetch('barras.csv'); // Asume que barras.csv está en la misma carpeta
-                    if (!localResponse.ok) {
-                        throw new Error(`Error al cargar el archivo local: ${localResponse.statusText}`);
-                    }
-                    const localCsvText = await localResponse.text();
-                    parseCSV(localCsvText);
-                    console.log('Carga exitosa de barras.csv desde el archivo local.');
-                    fileStatus.textContent = `¡Éxito! Se cargaron ${productData.length} productos desde el archivo local.`;
+                const jsonResponse = await fetch('barras.json');
+                if (jsonResponse.ok) {
+                    const jsonData = await jsonResponse.json();
+                    productData = jsonData.map(p => ({ description: (p.description || '').trim(), barcode: normalizeBarcode(p.barcode), rawBarcode: p.barcode }));
+                    console.log('Carga exitosa de barras.json desde el archivo local.');
+                    console.log('Primeros registros cargados desde JSON:', productData.slice(0, 10));
+                    fileStatus.textContent = `¡Éxito! Se cargaron ${productData.length} productos desde barras.json.`;
                     fileStatus.className = 'text-center text-sm text-green-600 font-medium h-5';
                     loadedSuccessfully = true;
-                } catch (localError) {
-                    console.error('Fallo al cargar el archivo local:', localError);
-                    fileStatus.textContent = 'Fallo al cargar los datos. Revisa la conexión, la URL de GitHub o si "barras.csv" está en la misma carpeta.';
-                    fileStatus.className = 'text-center text-sm text-red-600 font-medium h-5';
+                }
+            } catch (jsonErr) {
+                console.warn('No se pudo cargar barras.json localmente (no existe o error):', jsonErr);
+            }
+
+            // 2) Si no se cargó desde JSON local, intentar GitHub (raw CSV)
+            if (!loadedSuccessfully) {
+                try {
+                    fileStatus.textContent = 'Intentando cargar datos desde GitHub...';
+                    const githubRawUrl = 'https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/b81d215228987b7f7884f58da87e245b3f2b02c0/barras.csv';
+                    const response = await fetch(githubRawUrl);
+                    if (!response.ok) {
+                        console.warn(`Fallo al cargar desde GitHub (${response.status} ${response.statusText}). Intentando carga local como alternativa...`);
+                        throw new Error('GITHUB_LOAD_FAILED');
+                    }
+                    const csvText = await response.text();
+                    parseCSV(csvText);
+                    console.log('Carga exitosa de barras.csv desde GitHub.');
+                    fileStatus.textContent = `¡Éxito! Se cargaron ${productData.length} productos desde GitHub.`;
+                    fileStatus.className = 'text-center text-sm text-green-600 font-medium h-5';
+                    loadedSuccessfully = true;
+                } catch (error) {
+                    console.error('Error al cargar desde GitHub:', error);
+                    fileStatus.textContent = 'Fallo al cargar desde GitHub. Intentando carga local...';
+                    fileStatus.className = 'text-center text-sm text-orange-600 font-medium h-5';
+
+                    // 3) Fallback final: intentar cargar `barras.csv` localmente
+                    try {
+                        const localResponse = await fetch('barras.csv'); // Asume que barras.csv está en la misma carpeta
+                        if (!localResponse.ok) {
+                            throw new Error(`Error al cargar el archivo local: ${localResponse.statusText}`);
+                        }
+                        const localCsvText = await localResponse.text();
+                        parseCSV(localCsvText);
+                        console.log('Carga exitosa de barras.csv desde el archivo local.');
+                        console.log('Primeros registros cargados desde CSV local:', productData.slice(0, 10));
+                        fileStatus.textContent = `¡Éxito! Se cargaron ${productData.length} productos desde el archivo local.`;
+                        fileStatus.className = 'text-center text-sm text-green-600 font-medium h-5';
+                        loadedSuccessfully = true;
+                    } catch (localError) {
+                        console.error('Fallo al cargar el archivo local:', localError);
+                        fileStatus.textContent = 'Fallo al cargar los datos. Revisa la conexión, la URL de GitHub o si "barras.csv"/"barras.json" están en la misma carpeta.';
+                        fileStatus.className = 'text-center text-sm text-red-600 font-medium h-5';
+                    }
                 }
             }
-            
+
             if (loadedSuccessfully && productData.length > 0) {
                 providerSection.classList.remove('hidden');
                 document.getElementById('upload-section').classList.add('hidden');
                 providerNameInput.focus();
             } else if (!loadedSuccessfully) {
-                // Si ni GitHub ni la carga local tuvieron éxito, mantener la sección de carga visible.
+                // Si ninguna opción tuvo éxito, mantener la sección de carga visible.
                 document.getElementById('upload-section').classList.remove('hidden');
             }
         }
@@ -262,19 +280,52 @@
         function parseCSV(csvText) {
             productData = [];
             const lines = csvText.split(/\r\n|\n/);
-            const startIndex = 1; // Forzamos el inicio en la primera línea, ya que el CSV tiene cabecera
+            if (lines.length <= 1) return;
+
+            // Detectar delimitador en la primera línea (cabecera)
+            const header = lines[0];
+            const delimiter = header.indexOf(',') !== -1 && header.indexOf(';') === -1 ? ',' : (header.indexOf(';') !== -1 ? ';' : ',');
+            const startIndex = 1; // asumimos cabecera en la primera línea
 
             for (let i = startIndex; i < lines.length; i++) {
                 if (lines[i].trim() === '') continue;
-                const parts = lines[i].split(';');
+                const parts = lines[i].split(delimiter);
                 if (parts.length >= 2) {
                     const description = parts[0].trim().replace(/"/g, '');
-                    const barcode = parts[1].trim().replace(/"/g, '').replace(',', '.');
-                    if (description && barcode) {
-                        productData.push({ description, barcode });
+                    const rawBarcode = parts[1].trim().replace(/"/g, '');
+                    const barcode = normalizeBarcode(rawBarcode);
+                    if (description && barcode !== null && barcode !== '') {
+                        // Asegurar que barcode sea cadena y guardar rawBarcode para debug
+                        productData.push({ description, barcode: String(barcode), rawBarcode });
                     }
                 }
             }
+        }
+
+        // Normaliza el código de barras para evitar notación científica y asegurar una cadena legible
+        function normalizeBarcode(raw) {
+            if (raw === null || raw === undefined) return '';
+            let s = String(raw).trim();
+            if (s === '') return '';
+
+            // Reemplazar comas por punto para manejar notación tipo 8,41212E+12
+            s = s.replace(/,/g, '.');
+
+            // Si contiene 'e' (notación científica) o un punto decimal, intentar convertir a número
+            if (/[eE]/.test(s) || s.indexOf('.') !== -1) {
+                // intentar parseo como número
+                const n = Number(s);
+                if (!Number.isNaN(n) && Number.isFinite(n)) {
+                    // Si es prácticamente entero, devolver entero sin notación científica
+                    if (Math.abs(n - Math.round(n)) < 1e-6) {
+                        return String(Math.round(n));
+                    }
+                    return String(n);
+                }
+            }
+
+            // Si es sólo dígitos con espacios u otros, limpiar y devolver
+            return s;
         }
 
         // --- Lógica de Búsqueda y Pedido ---
