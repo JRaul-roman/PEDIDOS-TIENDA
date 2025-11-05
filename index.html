@@ -280,7 +280,7 @@
         // --- Lógica de Búsqueda y Pedido ---
         function handleSearch() {
             const rawQuery = searchInput.value.trim();
-            const lowerCaseQuery = rawQuery.toLowerCase();
+            const lowerCaseQuery = rawQuery.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
             if (rawQuery === '') {
                 resultText.innerHTML = `<p class="text-gray-500 text-center text-sm">Aquí se mostrará el resultado de la búsqueda.</p>`;
@@ -295,7 +295,7 @@
             }
 
             const barcodeMatches = productData.filter(p => p.barcode.includes(rawQuery));
-            const descriptionMatches = productData.filter(p => p.description.toLowerCase().includes(lowerCaseQuery));
+            const descriptionMatches = productData.filter(p => p.description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(lowerCaseQuery));
             
             const allMatches = [...barcodeMatches, ...descriptionMatches];
             
