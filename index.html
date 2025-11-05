@@ -299,7 +299,7 @@
             
             const allMatches = [...barcodeMatches, ...descriptionMatches];
             
-            const uniqueProducts = [...new Map(allMatches.map(item => [item.barcode, item])).values()];
+            const uniqueProducts = [...new Map(allMatches.map(item => [item.description + item.barcode, item])).values()];
 
             if (uniqueProducts.length > 0) {
                 displayMultipleResults(uniqueProducts);
