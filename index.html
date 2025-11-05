@@ -210,18 +210,16 @@
             let loadedSuccessfully = false;
 
             try {
-                // URL estándar y robusta para obtener el contenido crudo del archivo desde la rama principal.
                 // Intentar cargar desde la URL "raw" de GitHub
-                const githubRawUrl = 'https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/main/barras.csv';
+                const githubRawUrl = 'https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/main/barras.json';
                 
                 const response = await fetch(githubRawUrl);
                 if (!response.ok) {
                     console.warn(`Fallo al cargar desde GitHub (${response.status} ${response.statusText}). Intentando carga local como alternativa...`);
-                    throw new Error('GITHUB_LOAD_FAILED'); // Lanzar un error específico para el catch
+                    throw new Error('GITHUB_LOAD_FAILED');
                 }
-                const csvText = await response.text();
-                parseCSV(csvText);
-                console.log('Carga exitosa de barras.csv desde GitHub.');
+                productData = await response.json();
+                console.log('Carga exitosa de barras.json desde GitHub.');
                 fileStatus.textContent = `¡Éxito! Se cargaron ${productData.length} productos desde GitHub.`;
                 fileStatus.className = 'text-center text-sm text-green-600 font-medium h-5';
                 loadedSuccessfully = true;
@@ -232,19 +230,18 @@
 
                 // Si la carga de GitHub falló, intentar cargar el archivo localmente
                 try {
-                    const localResponse = await fetch('barras.csv'); // Asume que barras.csv está en la misma carpeta
+                    const localResponse = await fetch('barras.json');
                     if (!localResponse.ok) {
                         throw new Error(`Error al cargar el archivo local: ${localResponse.statusText}`);
                     }
-                    const localCsvText = await localResponse.text();
-                    parseCSV(localCsvText);
-                    console.log('Carga exitosa de barras.csv desde el archivo local.');
+                    productData = await localResponse.json();
+                    console.log('Carga exitosa de barras.json desde el archivo local.');
                     fileStatus.textContent = `¡Éxito! Se cargaron ${productData.length} productos desde el archivo local.`;
                     fileStatus.className = 'text-center text-sm text-green-600 font-medium h-5';
                     loadedSuccessfully = true;
                 } catch (localError) {
                     console.error('Fallo al cargar el archivo local:', localError);
-                    fileStatus.textContent = 'Fallo al cargar los datos. Revisa la conexión, la URL de GitHub o si "barras.csv" está en la misma carpeta.';
+                    fileStatus.textContent = 'Fallo al cargar los datos. Revisa la conexión, la URL de GitHub o si "barras.json" está en la misma carpeta.';
                     fileStatus.className = 'text-center text-sm text-red-600 font-medium h-5';
                 }
             }
@@ -254,26 +251,7 @@
                 document.getElementById('upload-section').classList.add('hidden');
                 providerNameInput.focus();
             } else if (!loadedSuccessfully) {
-                // Si ni GitHub ni la carga local tuvieron éxito, mantener la sección de carga visible.
                 document.getElementById('upload-section').classList.remove('hidden');
-            }
-        }
-
-        function parseCSV(csvText) {
-            productData = [];
-            const lines = csvText.split(/\r\n|\n/);
-            const startIndex = 1; // Forzamos el inicio en la primera línea, ya que el CSV tiene cabecera
-
-            for (let i = startIndex; i < lines.length; i++) {
-                if (lines[i].trim() === '') continue;
-                const parts = lines[i].split(';');
-                if (parts.length >= 2) {
-                    const description = parts[0].trim().replace(/"/g, '');
-                    const barcode = parts[1].trim().replace(/"/g, '').replace(',', '.');
-                    if (description && barcode) {
-                        productData.push({ description, barcode });
-                    }
-                }
             }
         }
 
