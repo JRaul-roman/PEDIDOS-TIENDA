@@ -221,11 +221,21 @@
                     document.getElementById('upload-section').classList.add('hidden');
                     providerNameInput.focus();
                 } else {
-                    throw new Error(`Error al cargar el archivo local: ${jsonResponse.statusText}`);
+                    // Log the HTTP error status and message
+                    console.error(`Error HTTP al cargar el archivo: ${jsonResponse.status} - ${jsonResponse.statusText}`);
+                    throw new Error(`Error de red al cargar el archivo: ${jsonResponse.status} ${jsonResponse.statusText}`);
                 }
-            } catch (jsonErr) {
-                console.error('Fallo al cargar el archivo local:', jsonErr);
-                fileStatus.textContent = 'Fallo al cargar los datos. Asegúrate de que el archivo "barras.json" esté en la misma carpeta.';
+            } catch (error) { // Renamed jsonErr to error for clarity
+                console.error('Fallo al cargar los datos:', error);
+                let errorMessage = 'Fallo al cargar los datos. ';
+                if (error.message.includes('network')) {
+                    errorMessage += 'Hubo un problema de red o el archivo no se encontró en la URL especificada.';
+                } else if (error.name === 'SyntaxError') {
+                    errorMessage += 'El archivo JSON no tiene un formato válido.';
+                } else {
+                    errorMessage += 'Asegúrate de que el archivo "barras.json" esté accesible y sea válido.';
+                }
+                fileStatus.textContent = errorMessage;
                 fileStatus.className = 'text-center text-sm text-red-600 font-medium h-5';
                 document.getElementById('upload-section').classList.remove('hidden');
             }
