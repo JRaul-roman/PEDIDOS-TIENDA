@@ -211,8 +211,8 @@
                 const jsonResponse = await fetch('https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/main/barras.json');
                 if (jsonResponse.ok) {
                     const jsonData = await jsonResponse.json();
-                    productData = jsonData.map(p => ({ description: (p.description || '').trim(), barcode: normalizeBarcode(p.barcode), rawBarcode: p.barcode }));
-                    console.log('Carga exitosa de barras.json desde el archivo local.');
+                    productData = jsonData.map(p => ({ description: (p.DESCRIPCION || '').trim(), barcode: normalizeBarcode(p.CODIGO_BARRAS), rawBarcode: p.CODIGO_BARRAS }));
+                    console.log('Carga exitosa de barras.json desde GitHub.');
                     console.log('Primeros registros cargados desde JSON:', productData.slice(0, 10));
                     fileStatus.textContent = `¡Éxito! Se cargaron ${productData.length} productos desde barras.json.`;
                     fileStatus.className = 'text-center text-sm text-green-600 font-medium h-5';
