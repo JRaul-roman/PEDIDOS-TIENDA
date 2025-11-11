@@ -208,9 +208,12 @@
             fileStatus.className = 'text-center text-sm text-blue-600 font-medium h-5';
 
             try {
-                const jsonResponse = await fetch('https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/main/barras.json');
-                if (jsonResponse.ok) {
-                    const jsonData = await jsonResponse.json();
+                const response = await fetch('barras.json');
+                if (response.ok) {
+                    const buffer = await response.arrayBuffer();
+                    const decoder = new TextDecoder('utf-8');
+                    const text = decoder.decode(buffer);
+                    const jsonData = JSON.parse(text);
                     productData = jsonData.map(p => ({ description: (p.DESCRIPCION || '').trim(), barcode: normalizeBarcode(p.CODIGO_BARRAS), rawBarcode: p.CODIGO_BARRAS }));
                     console.log('Carga exitosa de barras.json desde GitHub.');
                     console.log('Primeros registros cargados desde JSON:', productData.slice(0, 10));
@@ -222,8 +225,8 @@
                     providerNameInput.focus();
                 } else {
                     // Log the HTTP error status and message
-                    console.error(`Error HTTP al cargar el archivo: ${jsonResponse.status} - ${jsonResponse.statusText}`);
-                    throw new Error(`Error de red al cargar el archivo: ${jsonResponse.status} ${jsonResponse.statusText}`);
+                    console.error(`Error HTTP al cargar el archivo: ${response.status} - ${response.statusText}`);
+                    throw new Error(`Error de red al cargar el archivo: ${response.status} ${response.statusText}`);
                 }
             } catch (error) { // Renamed jsonErr to error for clarity
                 console.error('Fallo al cargar los datos:', error);
