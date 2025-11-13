@@ -208,7 +208,7 @@
             fileStatus.className = 'text-center text-sm text-blue-600 font-medium h-5';
 
             try {
-                const response = await fetch('barras.json');
+                const response = await fetch('https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/refs/heads/main/barras.json');
                 if (response.ok) {
                     const buffer = await response.arrayBuffer();
                     const decoder = new TextDecoder('utf-8');
