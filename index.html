@@ -125,7 +125,12 @@
                 <div class="flex flex-col sm:flex-row gap-3">
                     <div class="flex-grow">
                         <label for="provider-name" class="block text-sm font-medium text-gray-600 mb-1">Nombre del Proveedor</label>
-                        <input type="text" id="provider-name" placeholder="Ej: Distribuidora ABC" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                        <select id="provider-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                            <option value="">Selecciona un proveedor</option>
+                            <option value="Disycash">Disycash</option>
+                            <option value="Cafes Mora">Cafes Mora</option>
+                            <option value="Miercoles Mora">Miercoles Mora</option>
+                        </select>
                     </div>
                     <div class="flex-grow">
                         <label for="provider-contact" class="block text-sm font-medium text-gray-600 mb-1">Contacto</label>
@@ -270,6 +275,7 @@
             loadRemoteFile(); // Llama a la función que carga desde GitHub
             loadOrderHistory();
             loadProviderHistory();
+            updateProviderDropdown();
         });
 
         async function loadRemoteFile() {
@@ -737,7 +743,7 @@
 
         // --- Lógica de Proveedores ---
         
-        function loadProviderHistory() {
+function loadProviderHistory() {
             const savedProviders = localStorage.getItem('providerHistory');
             if (savedProviders) {
                 try {
@@ -749,42 +755,65 @@
             }
         }
 
+        function updateProviderDropdown() {
+            const mainProviders = ["Disycash", "Cafes Mora", "Miercoles Mora"];
+            let allProviders = [...mainProviders];
+
+            if (providerHistory && providerHistory.length > 0) {
+                providerHistory.forEach(p => {
+                    if (!allProviders.find(mp => mp.toLowerCase() === p.name.toLowerCase())) {
+                        allProviders.push(p.name);
+                    }
+                });
+            }
+
+            const currentValue = providerNameInput.value;
+
+            while (providerNameInput.options.length > 1) {
+                providerNameInput.remove(1);
+            }
+
+            allProviders.sort().forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                providerNameInput.appendChild(option);
+            });
+
+            providerNameInput.value = currentValue;
+        }
+
         function saveProviderHistory() {
             localStorage.setItem('providerHistory', JSON.stringify(providerHistory));
         }
 
         function saveCurrentProvider() {
-            const name = providerNameInput.value.trim();
+            const name = providerNameInput.value;
             const contact = providerContactInput.value.trim();
 
             if (!name) {
-                alert('Por favor, ingresa el nombre del proveedor.');
+                alert('Por favor, selecciona un proveedor.');
                 providerNameInput.focus();
                 return;
             }
 
             currentProvider = { name, contact };
             
-            // Agregar a historial si no existe
             const existingProvider = providerHistory.find(p => p.name.toLowerCase() === name.toLowerCase());
             if (!existingProvider) {
                 providerHistory.unshift({ name, contact });
-                // Mantener solo los últimos 10 proveedores
                 if (providerHistory.length > 10) {
                     providerHistory = providerHistory.slice(0, 10);
                 }
                 saveProviderHistory();
+                updateProviderDropdown();
+            } else {
+                existingProvider.contact = contact;
+                saveProviderHistory();
             }
 
-            // Mostrar la sección de búsqueda
             searchSection.classList.remove('hidden');
             searchInput.focus();
-        }
-
-        function selectProviderFromHistory(provider) {
-            providerNameInput.value = provider.name;
-            providerContactInput.value = provider.contact;
-            currentProvider = { ...provider };
         }
 
         function clearProvider() {
