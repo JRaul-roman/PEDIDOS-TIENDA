@@ -211,6 +211,11 @@
                 </div>
             </div>
             
+            <div class="mb-4">
+                <label for="observaciones-pedido" class="block text-sm font-medium text-gray-600 mb-1">Observaciones</label>
+                <textarea id="observaciones-pedido" placeholder="Añade notas o comentarios para este pedido..." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" rows="3"></textarea>
+            </div>
+
             <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <ul id="order-list" class="divide-y divide-gray-200"></ul>
             </div>
@@ -604,12 +609,15 @@
             const orderName = prompt('Nombre del pedido:', `Pedido ${new Date().toLocaleDateString()}`);
             if (!orderName) return;
 
+            const observaciones = document.getElementById('observaciones-pedido').value.trim();
+
             const newOrder = {
                 id: Date.now(),
                 name: orderName,
                 date: new Date().toISOString(),
                 items: [...orderList],
-                provider: { ...currentProvider }
+                provider: { ...currentProvider },
+                observaciones: observaciones
             };
 
             // Eliminar pedidos anteriores del mismo proveedor y día
@@ -653,6 +661,8 @@
                 const orderDate = new Date(order.date).toLocaleString('es-ES');
                 const providerInfo = order.provider && order.provider.name ? 
                     `<p class="text-xs text-blue-600 mt-1">Proveedor: ${order.provider.name}</p>` : '';
+                const observacionesInfo = order.observaciones ? 
+                    `<p class="text-xs text-yellow-700 bg-yellow-100 p-2 rounded-md mt-2"><strong>Obs:</strong> ${order.observaciones}</p>` : '';
                 
                 orderElement.innerHTML = `
                     <div class="flex justify-between items-start">
@@ -661,6 +671,7 @@
                             <p class="text-xs text-gray-500 mt-1">${orderDate}</p>
                             <p class="text-xs text-gray-600 mt-1">${totalItems} productos</p>
                             ${providerInfo}
+                            ${observacionesInfo}
                         </div>
                         <div class="flex flex-col sm:flex-row gap-2 ml-4 flex-shrink-0 w-24 sm:w-auto">
                             <button class="restore-order-btn bg-green-600 text-white text-xs font-semibold px-2 py-2 sm:py-1 rounded-md hover:bg-green-700 transition-colors" data-id="${order.id}" title="Restaurar pedido">
@@ -715,6 +726,9 @@
                 clearProvider();
                 providerSection.classList.remove('hidden');
             }
+
+            // Restaurar observaciones
+            document.getElementById('observaciones-pedido').value = order.observaciones || '';
             
             // Mostrar secciones necesarias
             orderSection.classList.remove('hidden');
@@ -746,6 +760,7 @@
                 orderList = [];
                 orderSection.classList.add('hidden');
                 clearProvider();
+                document.getElementById('observaciones-pedido').value = ''; // Limpiar observaciones
                 renderOrderList();
             }
         }
