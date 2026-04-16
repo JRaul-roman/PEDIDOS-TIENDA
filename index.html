@@ -454,7 +454,7 @@
                     <strong class="block text-lg md:text-xl text-blue-800 mt-1">${product.description}</strong>
                     <p class="text-sm text-gray-500 mt-1">Código: ${product.barcode}</p>
                     <div class="mt-4 flex justify-center items-center gap-2">
-                        <input type="number" id="quantity-input" value="1" min="1" class="w-20 text-center px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                        <input type="number" id="quantity-input" value="1" min="1" step="any" class="w-20 text-center px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="p. ej: 0,5">
                         <button id="add-to-order-btn" class="bg-green-500 text-white font-semibold px-4 py-2 rounded-lg hover:bg-green-600 transition-colors shadow-sm text-sm">Añadir al pedido</button>
                     </div>
                 </div>`;
@@ -462,7 +462,7 @@
             
             document.getElementById('add-to-order-btn').addEventListener('click', () => {
                 const quantityInput = document.getElementById('quantity-input');
-                const quantity = parseInt(quantityInput.value, 10);
+                const quantity = parseFloat(quantityInput.value.replace(',', '.'));
                 if (quantity > 0) {
                     addToOrder(product, quantity);
                     resultText.innerHTML = `<p class="text-gray-500 text-center text-sm">Aquí se mostrará el resultado de la búsqueda.</p>`;
@@ -533,7 +533,7 @@
                     </div>
                     <div class="flex items-center gap-3 flex-shrink-0">
                         <button data-index="${index}" class="decrease-qty-btn bg-gray-200 text-gray-700 w-8 h-8 rounded-full font-bold hover:bg-gray-300 transition text-lg">-</button>
-                        <input type="number" value="${item.quantity}" min="1" data-index="${index}" class="quantity-in-list w-16 text-center border border-gray-300 rounded-md py-1 text-base">
+                        <input type="number" value="${item.quantity}" min="0.1" step="any" data-index="${index}" class="quantity-in-list w-16 text-center border border-gray-300 rounded-md py-1 text-base">
                         <button data-index="${index}" class="increase-qty-btn bg-gray-200 text-gray-700 w-8 h-8 rounded-full font-bold hover:bg-gray-300 transition text-lg">+</button>
                         <button data-index="${index}" class="remove-item-btn text-red-500 hover:text-red-700 ml-2 font-semibold text-lg">X</button>
                     </div>`;
@@ -544,7 +544,7 @@
             document.querySelectorAll('.increase-qty-btn').forEach(button => {
                 button.addEventListener('click', (e) => {
                     const index = parseInt(e.target.dataset.index);
-                    orderList[index].quantity++;
+                    orderList[index].quantity = Math.round((orderList[index].quantity + 0.5) * 10) / 10;
                     renderOrderList();
                 });
             });
@@ -552,7 +552,7 @@
             document.querySelectorAll('.decrease-qty-btn').forEach(button => {
                 button.addEventListener('click', (e) => {
                     const index = parseInt(e.target.dataset.index);
-                    orderList[index].quantity--;
+                    orderList[index].quantity = Math.round((orderList[index].quantity - 0.5) * 10) / 10;
                     if (orderList[index].quantity <= 0) {
                         orderList.splice(index, 1);
                     }
@@ -563,7 +563,7 @@
             document.querySelectorAll('.quantity-in-list').forEach(input => {
                 input.addEventListener('change', (e) => {
                     const index = parseInt(e.target.dataset.index);
-                    const newQuantity = parseInt(e.target.value, 10);
+                    const newQuantity = parseFloat(e.target.value.replace(',', '.'));
                     if (newQuantity > 0) {
                         orderList[index].quantity = newQuantity;
                     } else {
