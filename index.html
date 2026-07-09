@@ -319,6 +319,25 @@
             });
         });
 
+        function getProductDescription(product) {
+            const descriptionKeys = ['DESCRIPCION', 'DESCRIPCIÓN', 'DESCRIPCIÒN', 'descripcion', 'Descripción'];
+            for (const key of descriptionKeys) {
+                if (product && Object.prototype.hasOwnProperty.call(product, key)) {
+                    const value = product[key];
+                    if (value !== null && value !== undefined) {
+                        return String(value).trim();
+                    }
+                }
+            }
+
+            const fallbackKey = Object.keys(product || {}).find(key => /descrip/i.test(key));
+            if (fallbackKey) {
+                return String(product[fallbackKey]).trim();
+            }
+
+            return '';
+        }
+
         async function loadRemoteFile() {
             fileStatus.textContent = 'Cargando datos de productos...';
             fileStatus.className = 'text-center text-sm text-blue-600 font-medium h-5';
@@ -330,7 +349,13 @@
                     const decoder = new TextDecoder('utf-8');
                     const text = decoder.decode(buffer);
                     const jsonData = JSON.parse(text);
-                    productData = jsonData.map(p => ({ description: (p.DESCRIPCION || '').trim(), barcode: normalizeBarcode(p.CODIGO_BARRAS), rawBarcode: p.CODIGO_BARRAS }));
+                    productData = (jsonData || [])
+                        .filter(p => p && typeof p === 'object')
+                        .map(p => ({
+                            description: getProductDescription(p),
+                            barcode: normalizeBarcode(p.CODIGO_BARRAS),
+                            rawBarcode: p.CODIGO_BARRAS
+                        }));
                     console.log('Carga exitosa de barras.json desde GitHub.');
                     console.log('Primeros registros cargados desde JSON:', productData.slice(0, 10));
                     fileStatus.textContent = `¡Éxito! Se cargaron ${productData.length} productos desde barras.json.`;
