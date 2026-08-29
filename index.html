@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buscador de Productos con Escáner</title>
+    <title>Pedidos</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -111,10 +112,9 @@
             <h1 class="text-4xl md:text-5xl font-bold tracking-tight bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">PEDIDOS</h1>
         </header>
 
-        <div id="upload-section" class="mb-6">
-            <h2 class="text-base font-semibold text-gray-700 mb-2">Paso 1: Carga de datos</h2>
+        <div id="upload-section" class="hidden mb-6">
             <div class="p-4 border-2 border-dashed border-gray-300 rounded-lg text-center">
-                 <p id="file-status" class="text-center text-sm font-medium h-5">Cargando datos de productos...</p>
+                 <p id="file-status" class="text-center text-sm font-medium h-5">Cargando...</p>
             </div>
         </div>
 
@@ -156,7 +156,6 @@
             <div>
                 <label for="search-input" class="block text-sm font-medium text-gray-600 mb-1">Buscar por Descripción o Código de Barras</label>
                 <div class="flex items-center gap-3">
-                    <!-- MODIFICACIÓN: Se establece inputmode="text" para un teclado de texto general -->
                     <input type="search" inputmode="text" id="search-input" placeholder="Escribe una descripción, código o escanea..." class="flex-grow w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-sm">
                     <button id="scan-button" class="p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors" title="Escanear código de barras">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 3h-1m-5-3H8M7 8H6m11 4v1m1-5h1m-1 5v1m-6-1H8m1-5H8m5 11v1m-1-6v1m-5-1H6m6 6h1m-1-5h-1m5 5h1m-6-5h-1" /></svg>
@@ -246,9 +245,7 @@
         <button id="close-scanner-btn" class="mt-4 bg-red-600 text-white font-bold py-2 px-6 rounded-lg shadow-lg">Cerrar Escáner</button>
     </div>
 
-
     <script>
-        // --- Variables Globales ---
         let productData = [];
         let orderList = [];
         let orderHistory = [];
@@ -257,7 +254,6 @@
         const { jsPDF } = window.jspdf;
         let html5QrCode;
 
-        // --- Elementos del DOM ---
         const fileStatus = document.getElementById('file-status');
         const providerSection = document.getElementById('provider-section');
         const searchSection = document.getElementById('search-section');
@@ -280,15 +276,12 @@
         const exportDropdown = document.getElementById('export-dropdown');
         const clearHistoryBtn = document.getElementById('clear-history-btn');
         
-        // --- Lógica de Carga Automática ---
-        
         document.addEventListener('DOMContentLoaded', () => {
-            loadRemoteFile(); // Llama a la función que carga desde GitHub
+            loadRemoteFile();
             loadOrderHistory();
             loadProviderHistory();
             updateProviderDropdown();
             
-            // Event listeners para guardar con Enter y mostrar/ocultar botón
             providerNameInput.addEventListener('input', () => {
                 const existingButton = document.getElementById('restore-previous-order-btn');
                 if (existingButton) {
@@ -339,9 +332,6 @@
         }
 
         async function loadRemoteFile() {
-            fileStatus.textContent = 'Cargando datos de productos...';
-            fileStatus.className = 'text-center text-sm text-blue-600 font-medium h-5';
-
             try {
                 const response = await fetch('./barras.json');
                 if (response.ok) {
@@ -356,87 +346,36 @@
                             barcode: normalizeBarcode(p.CODIGO_BARRAS),
                             rawBarcode: p.CODIGO_BARRAS
                         }));
-                    console.log('Carga exitosa de barras.json desde GitHub.');
-                    console.log('Primeros registros cargados desde JSON:', productData.slice(0, 10));
-                    fileStatus.textContent = `¡Éxito! Se cargaron ${productData.length} productos desde barras.json.`;
-                    fileStatus.className = 'text-center text-sm text-green-600 font-medium h-5';
                     
                     providerSection.classList.remove('hidden');
                     document.getElementById('upload-section').classList.add('hidden');
                     providerNameInput.focus();
-                } else {
-                    // Log the HTTP error status and message
-                    console.error(`Error HTTP al cargar el archivo: ${response.status} - ${response.statusText}`);
-                    throw new Error(`Error de red al cargar el archivo: ${response.status} ${response.statusText}`);
                 }
-            } catch (error) { // Renamed jsonErr to error for clarity
+            } catch (error) {
                 console.error('Fallo al cargar los datos:', error);
-                let errorMessage = 'Fallo al cargar los datos. ';
-                if (error.message.includes('network')) {
-                    errorMessage += 'Hubo un problema de red o el archivo no se encontró en la URL especificada.';
-                } else if (error.name === 'SyntaxError') {
-                    errorMessage += 'El archivo JSON no tiene un formato válido.';
-                } else {
-                    errorMessage += 'Asegúrate de que el archivo "barras.json" esté accesible y sea válido.';
-                }
-                fileStatus.textContent = errorMessage;
-                fileStatus.className = 'text-center text-sm text-red-600 font-medium h-5';
                 document.getElementById('upload-section').classList.remove('hidden');
             }
         }
 
-        function parseCSV(csvText) {
-            productData = [];
-            const lines = csvText.split(/\r\n|\n/);
-            if (lines.length <= 1) return;
-
-            // Detectar delimitador en la primera línea (cabecera)
-            const header = lines[0];
-            const delimiter = header.indexOf(',') !== -1 && header.indexOf(';') === -1 ? ',' : (header.indexOf(';') !== -1 ? ';' : ',');
-            const startIndex = 1; // asumimos cabecera en la primera línea
-
-            for (let i = startIndex; i < lines.length; i++) {
-                if (lines[i].trim() === '') continue;
-                const parts = lines[i].split(delimiter);
-                if (parts.length >= 2) {
-                    const description = parts[0].trim().replace(/"/g, '');
-                    const rawBarcode = parts[1].trim().replace(/"/g, '');
-                    const barcode = normalizeBarcode(rawBarcode);
-                    if (description && barcode !== null && barcode !== '') {
-                        // Asegurar que barcode sea cadena y guardar rawBarcode para debug
-                        productData.push({ description, barcode: String(barcode), rawBarcode });
-                    }
-                }
-            }
-        }
-
-        // Normaliza el código de barras para evitar notación científica y asegurar una cadena legible
         function normalizeBarcode(raw) {
             if (raw === null || raw === undefined) return '';
             let s = String(raw).trim();
             if (s === '') return '';
 
-            // Reemplazar comas por punto para manejar notación tipo 8,41212E+12
             s = s.replace(/,/g, '.');
 
-            // Si contiene 'e' (notación científica) o un punto decimal, intentar convertir a número
             if (/[eE]/.test(s) || s.indexOf('.') !== -1) {
-                // intentar parseo como número
                 const n = Number(s);
                 if (!Number.isNaN(n) && Number.isFinite(n)) {
-                    // Si es prácticamente entero, devolver entero sin notación científica
                     if (Math.abs(n - Math.round(n)) < 1e-6) {
                         return String(Math.round(n));
                     }
                     return String(n);
                 }
             }
-
-            // Si es sólo dígitos con espacios u otros, limpiar y devolver
             return s;
         }
 
-        // --- Lógica de Búsqueda y Pedido ---
         function handleSearch() {
             const rawQuery = searchInput.value.trim();
             const lowerCaseQuery = rawQuery.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -457,7 +396,6 @@
             const descriptionMatches = productData.filter(p => p.description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(lowerCaseQuery));
             
             const allMatches = [...barcodeMatches, ...descriptionMatches];
-            
             const uniqueProducts = [...new Map(allMatches.map(item => [item.description + item.barcode, item])).values()];
 
             if (uniqueProducts.length > 0) {
@@ -565,7 +503,6 @@
                 orderListElement.appendChild(li);
             });
 
-            // Event listeners for quantity controls
             document.querySelectorAll('.increase-qty-btn').forEach(button => {
                 button.addEventListener('click', (e) => {
                     const index = parseInt(e.target.dataset.index);
@@ -606,8 +543,6 @@
             });
         }
 
-        // --- Lógica del Historial de Pedidos ---
-        
         function loadOrderHistory() {
             const savedHistory = localStorage.getItem('orderHistory');
             if (savedHistory) {
@@ -615,7 +550,6 @@
                     orderHistory = JSON.parse(savedHistory);
                     renderHistoryList();
                 } catch (error) {
-                    console.error('Error al cargar el historial:', error);
                     orderHistory = [];
                 }
             }
@@ -645,32 +579,20 @@
                 observaciones: observaciones
             };
 
-            // Eliminar pedidos anteriores del mismo proveedor y día
-            const removedCount = removeOldOrdersFromSameProviderAndDay(currentProvider.name, newOrder.date);
-
+            removeOldOrdersFromSameProviderAndDay(currentProvider.name, newOrder.date);
             orderHistory.unshift(newOrder);
             
-            // Mantener solo los últimos 20 pedidos
             if (orderHistory.length > 20) {
                 orderHistory = orderHistory.slice(0, 20);
             }
 
             saveOrderHistory();
             renderHistoryList();
-            
-            const providerInfo = currentProvider.name ? ` para ${currentProvider.name}` : '';
-            let message = `Pedido "${orderName}" guardado exitosamente${providerInfo}.`;
-            
-            if (removedCount > 0) {
-                message += `\n\n🧹 Se eliminaron ${removedCount} pedido(s) anterior(es) del mismo proveedor y día.`;
-            }
-            
-            alert(message);
+            alert(`Pedido "${orderName}" guardado.`);
         }
 
         function renderHistoryList() {
             historyList.innerHTML = '';
-            
             if (orderHistory.length === 0) {
                 noHistoryMessage.classList.remove('hidden');
                 return;
@@ -712,7 +634,6 @@
                 historyList.appendChild(orderElement);
             });
 
-            // Event listeners para los botones
             document.querySelectorAll('.restore-order-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const orderId = parseInt(e.target.dataset.id);
@@ -732,38 +653,28 @@
             const order = orderHistory.find(o => o.id === orderId);
             if (!order) return;
 
-            // Si hay un pedido en curso, preguntar antes de reemplazarlo.
             if (orderList.length > 0 && !confirm('¿Deseas reemplazar el pedido actual con el pedido del historial? Se perderán los cambios no guardados.')) {
-                return; // El usuario canceló la acción
+                return;
             }
 
-            // Reemplazar la lista de pedido actual con la del historial.
             orderList = [...order.items];
             
-            // Restaurar información del proveedor si existe
             if (order.provider && order.provider.name) {
                 currentProvider = { ...order.provider };
                 providerNameInput.value = order.provider.name || '';
                 providerContactInput.value = order.provider.contact || '';
                 providerSection.classList.remove('hidden');
             } else {
-                // Si no hay proveedor, limpiar y mostrar la sección para que pueda agregar uno
                 clearProvider();
                 providerSection.classList.remove('hidden');
             }
 
-            // Restaurar observaciones
             document.getElementById('observaciones-pedido').value = order.observaciones || '';
             
-            // Mostrar secciones necesarias
             orderSection.classList.remove('hidden');
             searchSection.classList.remove('hidden');
             renderOrderList();
-            
-            // Enfocar en el campo de búsqueda para continuar agregando productos
             searchInput.focus();
-            
-            // Scroll hacia la sección de búsqueda para continuar agregando productos
             searchSection.scrollIntoView({ behavior: 'smooth' });
         }
 
@@ -785,18 +696,8 @@
                 orderList = [];
                 orderSection.classList.add('hidden');
                 clearProvider();
-                document.getElementById('observaciones-pedido').value = ''; // Limpiar observaciones
+                document.getElementById('observaciones-pedido').value = '';
                 renderOrderList();
-            }
-        }
-
-        function toggleHistorySection() {
-            if (historySection.classList.contains('hidden')) {
-                historySection.classList.remove('hidden');
-                document.getElementById('show-history-btn').textContent = 'Ocultar Historial';
-            } else {
-                historySection.classList.add('hidden');
-                document.getElementById('show-history-btn').textContent = 'Historial Pedidos';
             }
         }
 
@@ -806,26 +707,19 @@
                 return;
             }
 
-            const confirmMessage = `¿Estás seguro de que deseas borrar TODO el historial?\n\n📊 Se eliminarán ${orderHistory.length} pedido(s) guardado(s).\n\n⚠️ Esta acción NO se puede deshacer.`;
-            
-            if (confirm(confirmMessage)) {
+            if (confirm(`¿Estás seguro de que deseas borrar TODO el historial?`)) {
                 orderHistory = [];
                 saveOrderHistory();
                 renderHistoryList();
-                
-                alert('✅ Historial borrado exitosamente.\n\nTodos los pedidos guardados han sido eliminados.');
             }
         }
 
-        // --- Lógica de Proveedores ---
-        
-function loadProviderHistory() {
+        function loadProviderHistory() {
             const savedProviders = localStorage.getItem('providerHistory');
             if (savedProviders) {
                 try {
                     providerHistory = JSON.parse(savedProviders);
                 } catch (error) {
-                    console.error('Error al cargar el historial de proveedores:', error);
                     providerHistory = [];
                 }
             }
@@ -844,9 +738,7 @@ function loadProviderHistory() {
                 });
             }
 
-            // Limpiar opciones existentes
             dataList.innerHTML = '';
-
             allProviders.sort().forEach(name => {
                 const option = document.createElement('option');
                 option.value = name;
@@ -868,7 +760,6 @@ function loadProviderHistory() {
                 return;
             }
 
-            // Evitar guardado innecesario si no hay cambios
             if (currentProvider.name === name && currentProvider.contact === contact) {
                 searchSection.classList.remove('hidden');
                 searchInput.focus();
@@ -904,20 +795,6 @@ function loadProviderHistory() {
             currentProvider = { name: '', contact: '' };
         }
 
-        function addOrderItemsToCurrentOrder(itemsToAdd) {
-            itemsToAdd.forEach(item => {
-                const existingProduct = orderList.find(existingItem => existingItem.barcode === item.barcode);
-                
-                if (existingProduct) {
-                    // Si el producto ya existe, sumar las cantidades
-                    existingProduct.quantity += item.quantity;
-                } else {
-                    // Si no existe, agregarlo al pedido
-                    orderList.push({ ...item });
-                }
-            });
-        }
-
         function checkForPreviousOrder(providerName) {
             const today = new Date().toDateString();
             const previousOrder = orderHistory.find(order => 
@@ -944,39 +821,27 @@ function loadProviderHistory() {
         }
 
         function removeOldOrdersFromSameProviderAndDay(providerName, currentDate) {
-            if (!providerName) return 0; // No eliminar si no hay proveedor
-            
+            if (!providerName) return 0;
             const today = new Date(currentDate);
             const todayString = today.toDateString();
-            
             const initialCount = orderHistory.length;
             
-            // Filtrar pedidos que NO sean del mismo proveedor y día
             orderHistory = orderHistory.filter(order => {
                 if (!order.provider || !order.provider.name) return true;
-                
                 const orderDate = new Date(order.date);
                 const orderDateString = orderDate.toDateString();
-                
-                // Mantener el pedido si:
-                // - No es del mismo proveedor, O
-                // - No es del mismo día
                 return !(order.provider.name.toLowerCase() === providerName.toLowerCase() && 
                         orderDateString === todayString);
             });
             
             const removedCount = initialCount - orderHistory.length;
-            
             if (removedCount > 0) {
                 saveOrderHistory();
                 renderHistoryList();
             }
-            
             return removedCount;
         }
 
-        // --- Lógica del Menú de Exportación ---
-        
         function toggleExportDropdown() {
             if (exportDropdown.classList.contains('hidden')) {
                 exportDropdown.classList.remove('hidden');
@@ -991,26 +856,17 @@ function loadProviderHistory() {
 
         function handleExportClick(format) {
             hideExportDropdown();
-            
             if (orderList.length === 0) {
                 alert('No hay productos en el pedido para exportar.');
                 return;
             }
-
             switch(format) {
-                case 'pdf':
-                    exportToPDF();
-                    break;
-                case 'excel':
-                    exportToExcel();
-                    break;
-                case 'word':
-                    exportToWord();
-                    break;
+                case 'pdf': exportToPDF(); break;
+                case 'excel': exportToExcel(); break;
+                case 'word': exportToWord(); break;
             }
         }
         
-        // --- Lógica del Escáner ---
         function startScanner() {
             scannerModal.classList.remove('hidden');
             scannerModal.classList.add('flex');
@@ -1018,15 +874,13 @@ function loadProviderHistory() {
             html5QrCode = new Html5Qrcode("scanner-reader");
             const config = { fps: 10, qrbox: { width: 250, height: 250 } };
 
-            const onScanSuccess = (decodedText, decodedResult) => {
+            const onScanSuccess = (decodedText) => {
                 searchInput.value = decodedText;
                 stopScanner();
                 handleSearch();
             };
 
-            const onScanFailure = (error) => {
-                 // No hacer nada en caso de fallo, sigue intentando
-            };
+            const onScanFailure = () => {};
             
             html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
                 .catch(err => {
@@ -1037,17 +891,12 @@ function loadProviderHistory() {
 
         function stopScanner() {
             if (html5QrCode && html5QrCode.isScanning) {
-                html5QrCode.stop().then(() => {
-                    console.log("Escáner detenido.");
-                }).catch(err => {
-                    console.error("Fallo al detener el escáner.", err);
-                });
+                html5QrCode.stop().catch(err => console.error("Fallo al detener el escáner.", err));
             }
             scannerModal.classList.add('hidden');
             scannerModal.classList.remove('flex');
         }
 
-        // --- Lógica de Exportación ---
         function downloadFile(filename, content, mimeType) {
             const blob = new Blob([content], { type: mimeType });
             const a = document.createElement('a');
@@ -1060,41 +909,31 @@ function loadProviderHistory() {
         
         function addOrderItemsToDocument(doc, startY) {
             let yPosition = startY;
-            
-            orderList.forEach((item, i) => {
-                if (yPosition > 280) { // Salto de página si es necesario
+            orderList.forEach((item) => {
+                if (yPosition > 280) {
                     doc.addPage();
                     yPosition = 20;
                 }
-                
                 doc.text(item.quantity.toString(), 20, yPosition);
                 doc.text(item.description, 50, yPosition);
                 doc.text(item.barcode, 150, yPosition);
                 yPosition += 4;
             });
-            
-            // Total de productos
             const totalItems = orderList.reduce((sum, item) => sum + item.quantity, 0);
             doc.setFont(undefined, 'bold');
             doc.text(`Total de productos: ${totalItems}`, 20, yPosition + 10);
         }
 
-
         function exportToPDF() {
             if(orderList.length === 0) return;
             const doc = new jsPDF();
-            
-            // Título
             doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
             doc.text("Lista de Pedido", 20, 20);
-            
-            // Fecha
             doc.setFontSize(10);
             doc.setFont(undefined, 'normal');
             doc.text(`Fecha: ${new Date().toLocaleDateString('es-ES')}`, 20, 30);
             
-            // Información del proveedor
             if (currentProvider.name) {
                 doc.text(`Proveedor: ${currentProvider.name}`, 20, 35);
                 if (currentProvider.contact) {
@@ -1102,26 +941,20 @@ function loadProviderHistory() {
                 }
             }
             
-            // Línea separadora
             const lineY = currentProvider.name ? 45 : 35;
             doc.line(20, lineY, 190, lineY);
             
-            // Encabezados de tabla
             doc.setFontSize(10);
             doc.setFont(undefined, 'bold');
             const tableStartY = lineY + 10;
             doc.text("Cantidad", 20, tableStartY);
             doc.text("Descripción", 50, tableStartY);
             doc.text("Código", 150, tableStartY);
-            
-            // Línea debajo de encabezados
             doc.line(20, tableStartY + 3, 190, tableStartY + 3);
             
-            // Contenido de la tabla
             doc.setFontSize(8);
             doc.setFont(undefined, 'normal');
             addOrderItemsToDocument(doc, tableStartY + 10);
-            
             doc.save("pedido.pdf");
         }
 
@@ -1131,18 +964,13 @@ function loadProviderHistory() {
                 return;
             }
             const doc = new jsPDF();
-            
-            // Título
             doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
             doc.text("Lista de Pedido", 20, 20);
-            
-            // Fecha
             doc.setFontSize(10);
             doc.setFont(undefined, 'normal');
             doc.text(`Fecha: ${new Date().toLocaleDateString('es-ES')}`, 20, 30);
             
-            // Información del proveedor
             if (currentProvider.name) {
                 doc.text(`Proveedor: ${currentProvider.name}`, 20, 35);
                 if (currentProvider.contact) {
@@ -1150,7 +978,6 @@ function loadProviderHistory() {
                 }
             }
             
-            // Línea separadora y encabezados
             const lineY = currentProvider.name ? 45 : 35;
             doc.line(20, lineY, 190, lineY);
             const tableStartY = lineY + 10;
@@ -1161,20 +988,14 @@ function loadProviderHistory() {
             doc.text("Código", 150, tableStartY);
             doc.line(20, tableStartY + 3, 190, tableStartY + 3);
             
-            // Contenido y total
             doc.setFontSize(8);
             doc.setFont(undefined, 'normal');
             addOrderItemsToDocument(doc, tableStartY + 10);
-            
-            // --- MÉTODO DE IMPRESIÓN MÁS FIABLE (Descarga directa) ---
-            // Esto descarga el archivo, que el usuario puede abrir e imprimir.
-            // Es la solución más compatible para todos los dispositivos.
             doc.save('pedido_para_imprimir.pdf');
         }
 
         function exportToWord() {
             if(orderList.length === 0) return;
-            
             const totalItems = orderList.reduce((sum, item) => sum + item.quantity, 0);
             const currentDate = new Date().toLocaleDateString('es-ES');
             
@@ -1217,54 +1038,38 @@ function loadProviderHistory() {
 
         function exportToExcel() {
             if(orderList.length === 0) return;
-            
-            // Crear contenido CSV para Excel
-            let csvContent = '\uFEFF'; // BOM para UTF-8
-            
-            // Información del pedido
+            let csvContent = '\uFEFF';
             csvContent += `Lista de Pedido\n`;
             csvContent += `Fecha,${new Date().toLocaleDateString('es-ES')}\n`;
             
-            // Información del proveedor
             if (currentProvider.name) {
                 csvContent += `Proveedor,${currentProvider.name}\n`;
                 if (currentProvider.contact) {
                     csvContent += `Contacto,${currentProvider.contact}\n`;
                 }
             }
-            csvContent += `\n`; // Línea en blanco
-            
-            // Encabezados de la tabla
+            csvContent += `\n`;
             csvContent += 'Cantidad,Descripción,Código de Barras\n';
             
-            // Datos de los productos
             orderList.forEach(item => {
                 csvContent += `${item.quantity},"${item.description}","${item.barcode}"\n`;
             });
             
-            // Agregar total
             const totalItems = orderList.reduce((sum, item) => sum + item.quantity, 0);
             csvContent += `\nTotal de productos,${totalItems},`;
             
             downloadFile('pedido.xlsx', csvContent, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         }
 
-        // --- Asignación de Eventos Iniciales ---
-        
-        // MODIFICACIÓN: Se elimina la lógica dinámica del teclado.
-        // El input ahora siempre usará el teclado de texto definido en el HTML.
         searchInput.addEventListener('input', handleSearch);
-
         scanButton.addEventListener('click', startScanner);
         closeScannerBtn.addEventListener('click', stopScanner);
 
-        // Event listeners para el historial
         document.getElementById('show-history-btn').addEventListener('click', () => {
             historySection.classList.remove('hidden');
             renderHistoryList();
         });
 
-        // El botón de "Ocultar Historial" está dentro de la sección de historial
         document.getElementById('toggle-history-btn').addEventListener('click', () => {
             historySection.classList.add('hidden');
             document.getElementById('show-history-btn').textContent = 'Historial Pedidos';
@@ -1275,7 +1080,6 @@ function loadProviderHistory() {
         document.getElementById('clear-order-btn').addEventListener('click', clearCurrentOrder);
         document.getElementById('save-provider-btn').addEventListener('click', saveCurrentProvider);
 
-        // Event listeners para el menú de exportación
         exportDropdownBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             toggleExportDropdown();
@@ -1285,13 +1089,11 @@ function loadProviderHistory() {
         document.getElementById('export-excel').addEventListener('click', () => handleExportClick('excel'));
         document.getElementById('export-doc').addEventListener('click', () => handleExportClick('word'));
 
-        // Cerrar menú al hacer clic fuera
         document.addEventListener('click', (e) => {
             if (!exportDropdownBtn.contains(e.target) && !exportDropdown.contains(e.target)) {
                 hideExportDropdown();
             }
         });
-
     </script>
 </body>
 </html>
