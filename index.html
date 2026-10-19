@@ -9,7 +9,8 @@
     <script src="https://unpkg.com/html5-qrcode/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://unpkg.com/html-docx-js/dist/html-docx.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -253,6 +254,8 @@
         let providerHistory = [];
         const { jsPDF } = window.jspdf;
         let html5QrCode;
+        const DRAFT_KEY = 'currentOrderDraft';
+        const observacionesInput = document.getElementById('observaciones-pedido');
 
         const fileStatus = document.getElementById('file-status');
         const providerSection = document.getElementById('provider-section');
@@ -350,7 +353,8 @@
                     providerSection.classList.remove('hidden');
                     document.getElementById('upload-section').classList.add('hidden');
                     providerNameInput.focus();
-                }
+                    restoreDraft();
+}
             } catch (error) {
                 console.error('Fallo al cargar los datos:', error);
                 document.getElementById('upload-section').classList.remove('hidden');
@@ -481,9 +485,45 @@
             renderOrderList();
         }
 
+        // Guarda el pedido en curso para no perderlo si se recarga o se cierra la página
+        function saveDraft() {
+            try {
+                localStorage.setItem(DRAFT_KEY, JSON.stringify({
+                    items: orderList,
+                    provider: currentProvider,
+                    observaciones: observacionesInput.value
+                }));
+            } catch (error) {
+                console.error('No se pudo guardar el borrador del pedido:', error);
+            }
+        }
+
+        function restoreDraft() {
+            let draft;
+            try {
+                draft = JSON.parse(localStorage.getItem(DRAFT_KEY));
+            } catch (error) {
+                return;
+            }
+            if (!draft || !Array.isArray(draft.items) || draft.items.length === 0) return;
+
+            orderList = draft.items;
+            if (draft.provider && draft.provider.name) {
+                currentProvider = { ...draft.provider };
+                providerNameInput.value = draft.provider.name;
+                providerContactInput.value = draft.provider.contact || '';
+                saveProviderBtn.classList.add('hidden');
+            }
+            observacionesInput.value = draft.observaciones || '';
+            searchSection.classList.remove('hidden');
+            orderSection.classList.remove('hidden');
+            renderOrderList();
+}
+
         function renderOrderList() {
+            saveDraft();
             orderListElement.innerHTML = '';
-            if (orderList.length === 0) {
+if (orderList.length === 0) {
                 orderSection.classList.add('hidden');
                 return;
             }
@@ -768,7 +808,8 @@
             }
 
             currentProvider = { name, contact };
-            
+            saveDraft();
+
             const existingProvider = providerHistory.find(p => p.name.toLowerCase() === name.toLowerCase());
             if (!existingProvider) {
                 providerHistory.unshift({ name, contact });
@@ -1038,30 +1079,38 @@
 
         function exportToExcel() {
             if(orderList.length === 0) return;
-            let csvContent = '\uFEFF';
-            csvContent += `Lista de Pedido\n`;
-            csvContent += `Fecha,${new Date().toLocaleDateString('es-ES')}\n`;
-            
+            const rows = [
+                ['Lista de Pedido'],
+                ['Fecha', new Date().toLocaleDateString('es-ES')]
+            ];
+
             if (currentProvider.name) {
-                csvContent += `Proveedor,${currentProvider.name}\n`;
+                rows.push(['Proveedor', currentProvider.name]);
                 if (currentProvider.contact) {
-                    csvContent += `Contacto,${currentProvider.contact}\n`;
+                    rows.push(['Contacto', currentProvider.contact]);
                 }
             }
-            csvContent += `\n`;
-            csvContent += 'Cantidad,Descripción,Código de Barras\n';
-            
+            rows.push([]);
+            rows.push(['Cantidad', 'Descripción', 'Código de Barras']);
+
+            // El código de barras va como texto para que Excel no lo muestre como 8,41E+12
             orderList.forEach(item => {
-                csvContent += `${item.quantity},"${item.description}","${item.barcode}"\n`;
+                rows.push([item.quantity, item.description, String(item.barcode)]);
             });
-            
+
             const totalItems = orderList.reduce((sum, item) => sum + item.quantity, 0);
-            csvContent += `\nTotal de productos,${totalItems},`;
-            
-            downloadFile('pedido.xlsx', csvContent, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            rows.push([]);
+            rows.push(['Total de productos', totalItems]);
+
+            const sheet = XLSX.utils.aoa_to_sheet(rows);
+            sheet['!cols'] = [{ wch: 18 }, { wch: 45 }, { wch: 18 }];
+            const book = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(book, sheet, 'Pedido');
+            XLSX.writeFile(book, 'pedido.xlsx');
         }
 
         searchInput.addEventListener('input', handleSearch);
+        observacionesInput.addEventListener('input', saveDraft);
         scanButton.addEventListener('click', startScanner);
         closeScannerBtn.addEventListener('click', stopScanner);
 
