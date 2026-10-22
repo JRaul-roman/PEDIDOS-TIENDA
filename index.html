@@ -485,13 +485,15 @@
             renderOrderList();
         }
 
-        // Guarda el pedido en curso para no perderlo si se recarga o se cierra la página
-        function saveDraft() {
+        // Guarda el pedido en curso para no perderlo si se recarga o se cierra la página.
+        // saved = true: el pedido ya está en el historial y al volver a entrar se empieza uno nuevo
+        function saveDraft(saved) {
             try {
                 localStorage.setItem(DRAFT_KEY, JSON.stringify({
                     items: orderList,
                     provider: currentProvider,
-                    observaciones: observacionesInput.value
+                    observaciones: observacionesInput.value,
+                    saved: saved === true
                 }));
             } catch (error) {
                 console.error('No se pudo guardar el borrador del pedido:', error);
@@ -506,6 +508,10 @@
                 return;
             }
             if (!draft || !Array.isArray(draft.items) || draft.items.length === 0) return;
+            if (draft.saved) {
+                localStorage.removeItem(DRAFT_KEY);
+                return;
+            }
 
             orderList = draft.items;
             if (draft.provider && draft.provider.name) {
@@ -627,8 +633,9 @@
             }
 
             saveOrderHistory();
+            saveDraft(true);
             renderHistoryList();
-            alert(`Pedido "${orderName}" guardado.`);
+            alert(`Pedido "${orderName}" guardado. La próxima vez que entres empezarás un pedido nuevo; este queda en el Historial.`);
         }
 
         function renderHistoryList() {
