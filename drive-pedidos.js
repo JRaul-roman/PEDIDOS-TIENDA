@@ -56,7 +56,12 @@
     const token = await getToken(false);
     const res = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + token } });
     if (res.status === 401 && retry) { st.token = null; save(st); throw new Error('Sesión de Google caducada'); }
-    if (!res.ok) throw new Error('Drive respondió ' + res.status);
+    if (!res.ok) {
+      let msg = '';
+      try { msg = (await res.json()).error?.message || ''; } catch {}
+      if (/has not been used|is disabled/i.test(msg)) throw new Error('La Google Drive API no está activada en tu proyecto de Google Cloud');
+      throw new Error(`Drive respondió ${res.status}${msg ? ': ' + msg : ''}`);
+    }
     return res.status === 204 ? null : res.json();
   }
 
@@ -99,6 +104,8 @@
     },
     // Prepara el permiso al pulsar Guardar (dentro del clic). Devuelve una promesa.
     ensure: interactive => (CLIENT_ID && st.connected) ? getToken(interactive) : Promise.reject(new Error('Drive no conectado')),
+    /** Crea (o encuentra) PEDIDOS/<subfolder> en Drive. Devuelve el id de la subcarpeta. */
+    async prepare(subfolder) { return folder(subfolder, await folder(ROOT_NAME, 'root')); },
     /** Sube (o reemplaza) un PDF en PEDIDOS/<subfolder>. Devuelve el id del archivo en Drive. */
     async uploadPdf(subfolder, filename, blob, existingId) {
       const parent = await folder(subfolder, await folder(ROOT_NAME, 'root'));

@@ -1311,8 +1311,10 @@ function bind() {
   $('#set-drive').addEventListener('click', e => {
     const b = e.target.closest('[data-drive]'); if (!b) return;
     const a = b.dataset.drive;
-    if (a === 'on') DrivePedidos.connect().then(() => { toast('Google Drive conectado', { type: 'ok' }); renderDriveStatus(); if (pendingDrive().length) syncDrive(pendingDrive(), false); })
-      .catch(err => toast(err.message, { type: 'err' }));
+    if (a === 'on') DrivePedidos.connect()
+      .then(() => DrivePedidos.prepare(DRIVE_FOLDER))
+      .then(() => { toast(`Google Drive conectado: carpeta PEDIDOS / ${DRIVE_FOLDER} lista`, { type: 'ok', timeout: 6000 }); renderDriveStatus(); if (pendingDrive().length) syncDrive(pendingDrive(), false); })
+      .catch(err => { toast('Google Drive: ' + err.message, { type: 'err', timeout: 12000 }); renderDriveStatus(); });
     else if (a === 'sync') syncDrive(pendingDrive(), true);
     else if (a === 'all') { if (confirm(`¿Subir los ${S.history.length} pedidos del historial a Google Drive?`)) syncDrive(S.history.slice(), true); }
     else if (a === 'off') { DrivePedidos.disconnect(); renderDriveStatus(); toast('Google Drive desconectado'); }
