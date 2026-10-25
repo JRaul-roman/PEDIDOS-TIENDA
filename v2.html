@@ -371,6 +371,10 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
         <div class="seg" id="set-theme"><button data-theme="auto">Automático</button><button data-theme="light">Claro</button><button data-theme="dark">Oscuro</button></div>
       </section>
       <section class="set-sec">
+        <h3>Google Drive</h3>
+        <div id="set-drive"></div>
+      </section>
+      <section class="set-sec">
         <h3>Proveedores guardados</h3>
         <div id="set-provs"></div>
       </section>
@@ -401,6 +405,7 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div id="print-area"></div>
 
+<script src="drive-pedidos.js"></script>
 <script>
 'use strict';
 /* ---------- Utilidades ---------- */
@@ -813,7 +818,8 @@ function saveOrder() {
     id: existing ? existing.id : Date.now(),
     name: `${provider.name || 'Pedido'} · ${new Date(date).toLocaleDateString('es-ES')}`,
     date, updated: now.toISOString(), provider, notes: S.notes,
-    items: S.items.map(i => ({ ...i }))
+    items: S.items.map(i => ({ ...i })),
+    driveId: existing?.driveId
   };
   if (existing) S.history[S.history.indexOf(existing)] = order; else S.history.unshift(order);
   S.history = S.history.slice(0, 300);
@@ -822,6 +828,7 @@ function saveOrder() {
   S.editingId = order.id; S.dirty = false;
   persist(false); renderHistory();
   toast(existing ? 'Pedido actualizado en el historial' : 'Pedido guardado en el historial', { type: 'ok', action: 'Nuevo pedido', onAction: newOrder });
+  syncDrive([order], true);
 }
 
 /* ---------- Proveedores ---------- */
@@ -863,7 +870,7 @@ function renderHistory() {
     const d = new Date(o.updated || o.date);
     return `<article class="hist${o.id === S.editingId ? ' current' : ''}" data-id="${o.id}">
       <div class="hist-top"><div class="avatar" style="--h:${hue(who)}">${esc(initials(who))}</div>
-        <div class="hist-info"><h4>${esc(o.name)}</h4><p>${d.toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })} · ${plural(o.items.length, 'línea', 'líneas')} · ${plural(units(o.items), 'ud.', 'uds.')}</p></div></div>
+        <div class="hist-info"><h4>${esc(o.name)}</h4><p>${d.toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })} · ${plural(o.items.length, 'línea', 'líneas')} · ${plural(units(o.items), 'ud.', 'uds.')}${o.drive === 'ok' ? ' · ☁ en Drive' : o.drive === 'pend' ? ' · ⏳ Drive pendiente' : ''}</p></div></div>
       <p class="hist-preview">${esc(o.items.slice(0, 4).map(i => `${i.quantity}× ${i.description}`).join(' · '))}${o.items.length > 4 ? ' …' : ''}</p>
       <div class="hist-btns">
         <button data-h="open">Abrir</button><button data-h="copy">Repetir</button><button data-h="merge">Sumar al actual</button><button data-h="pdf">PDF</button><button data-h="wa">WhatsApp</button>
@@ -913,6 +920,10 @@ const fileBase = o => `Pedido_${safeName(o.provider?.name || 'tienda')}_${isoDay
 
 function exportPDF(o) {
   if (!window.jspdf) return toast('No se pudo cargar el generador de PDF (¿sin conexión?).', { type: 'err' });
+  buildPDF(o).save(fileBase(o) + '.pdf');
+}
+
+function buildPDF(o) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const W = doc.internal.pageSize.getWidth();
@@ -945,7 +956,44 @@ function exportPDF(o) {
   const fy = doc.lastAutoTable.finalY + 8;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(30, 41, 59);
   doc.text(`Total: ${o.items.length} líneas · ${units(o.items)} unidades`, 14, fy);
-  doc.save(fileBase(o) + '.pdf');
+  return doc;
+}
+
+/* ---------- Google Drive ---------- */
+const DRIVE_FOLDER = 'PEDIDOS GENERAL';
+const driveOn = () => window.DrivePedidos && DrivePedidos.status().configured && DrivePedidos.status().connected;
+
+// interactive=true solo desde un clic: puede abrir la ventana de Google si la sesión ha caducado.
+function syncDrive(orders, interactive) {
+  if (!driveOn() || !orders.length) return;
+  orders.forEach(o => { o.drive = 'pend'; });
+  store.set(K.hist, S.history); renderHistory(); renderDriveStatus();
+  DrivePedidos.ensure(interactive)
+    .then(async () => {
+      if (!window.jspdf) throw new Error('no se pudo generar el PDF');
+      for (const o of orders) {
+        o.driveId = await DrivePedidos.uploadPdf(DRIVE_FOLDER, fileBase(o) + '.pdf', buildPDF(o).output('blob'), o.driveId);
+        o.drive = 'ok';
+        store.set(K.hist, S.history);
+      }
+      if (interactive) toast(orders.length === 1 ? 'Guardado también en Google Drive' : `Subidos ${orders.length} pedidos a Google Drive`, { type: 'ok' });
+    })
+    .catch(e => { if (interactive) toast(`No se pudo subir a Drive (${e.message}). Queda pendiente y se reintentará.`, { type: 'warn', timeout: 7000 }); })
+    .finally(() => { store.set(K.hist, S.history); renderHistory(); renderDriveStatus(); });
+}
+const pendingDrive = () => S.history.filter(o => o.drive === 'pend');
+
+function renderDriveStatus() {
+  const box = $('#set-drive'); if (!box || !window.DrivePedidos) return;
+  const st = DrivePedidos.status(), pend = pendingDrive().length;
+  if (!st.configured) { box.innerHTML = '<p class="help">Pendiente de configurar el permiso de Google.</p>'; return; }
+  box.innerHTML = st.connected
+    ? `<p class="help">✓ Conectado. Cada pedido que guardes se sube en PDF a <b>PEDIDOS / ${DRIVE_FOLDER}</b> de tu Drive.${pend ? ` Pendientes de subir: <b>${pend}</b>.` : ''}</p>
+       <div class="row-btns">${pend ? `<button class="btn btn-primary" data-drive="sync">${icon('upload')}Subir pendientes</button>` : ''}
+       <button class="btn" data-drive="all">${icon('upload')}Subir todo el historial</button>
+       <button class="btn btn-danger" data-drive="off">Desconectar</button></div>`
+    : `<p class="help">Guarda automáticamente cada pedido en PDF en la carpeta <b>PEDIDOS / ${DRIVE_FOLDER}</b> de tu Google Drive. Solo tendrá acceso a los archivos que cree.</p>
+       <div class="row-btns"><button class="btn btn-primary" data-drive="on">${icon('upload')}Conectar con Google Drive</button></div>`;
 }
 
 function exportXLSX(o) {
@@ -1113,6 +1161,7 @@ function normalizeOrder(o) {
     id: o.id || Date.now() + Math.floor(Math.random() * 1000),
     name: o.name || 'Pedido', date: o.date || new Date().toISOString(), updated: o.updated,
     provider: { name: o.provider?.name || '', contact: o.provider?.contact || '' }, notes: o.notes || '',
+    driveId: o.driveId, drive: o.drive,
     items: (o.items || []).filter(i => i && i.description).map(i => ({ description: String(i.description), barcode: String(i.barcode || ''), quantity: Math.max(1, parseInt(i.quantity, 10) || 1) }))
   };
 }
@@ -1248,7 +1297,7 @@ function bind() {
     else if (h === 'del') deleteOrder(o.id);
   });
 
-  $('#btn-settings').addEventListener('click', () => { $('#set-url').value = S.cfg.catalogUrl; renderSettingsProviders(); $('#dlg-settings').showModal(); });
+  $('#btn-settings').addEventListener('click', () => { $('#set-url').value = S.cfg.catalogUrl; renderSettingsProviders(); renderDriveStatus(); $('#dlg-settings').showModal(); });
   $('#set-url').addEventListener('change', e => { S.cfg.catalogUrl = e.target.value.trim(); saveCfg(); });
   $('#set-refresh').addEventListener('click', () => { S.cfg.catalogUrl = $('#set-url').value.trim(); saveCfg(); refreshCatalog(true); });
   $('#set-file').addEventListener('change', e => { const f = e.target.files[0]; if (f) importCatalogFile(f); e.target.value = ''; });
@@ -1258,6 +1307,15 @@ function bind() {
     const i = +b.dataset.delprov, [p] = S.providers.splice(i, 1);
     store.set(K.prov, S.providers); renderSettingsProviders(); renderProviderChips();
     toast(`Proveedor eliminado: ${p.name}`, { action: 'Deshacer', onAction: () => { S.providers.splice(i, 0, p); store.set(K.prov, S.providers); renderSettingsProviders(); renderProviderChips(); } });
+  });
+  $('#set-drive').addEventListener('click', e => {
+    const b = e.target.closest('[data-drive]'); if (!b) return;
+    const a = b.dataset.drive;
+    if (a === 'on') DrivePedidos.connect().then(() => { toast('Google Drive conectado', { type: 'ok' }); renderDriveStatus(); if (pendingDrive().length) syncDrive(pendingDrive(), false); })
+      .catch(err => toast(err.message, { type: 'err' }));
+    else if (a === 'sync') syncDrive(pendingDrive(), true);
+    else if (a === 'all') { if (confirm(`¿Subir los ${S.history.length} pedidos del historial a Google Drive?`)) syncDrive(S.history.slice(), true); }
+    else if (a === 'off') { DrivePedidos.disconnect(); renderDriveStatus(); toast('Google Drive desconectado'); }
   });
   $('#bk-export').addEventListener('click', exportBackup);
   $('#bk-import').addEventListener('change', e => { const f = e.target.files[0]; if (f) importBackup(f); e.target.value = ''; });
@@ -1285,6 +1343,11 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCatalogStatus();
   if (migrated) toast(`${migrated === 1 ? 'Se copió' : 'Se copiaron'} ${plural(migrated, 'pedido', 'pedidos')} del programa de pedidos anterior`, { type: 'ok' });
   if (!S.meta?.manual || S.cfg.catalogUrl) refreshCatalog(false);
+  if (window.DrivePedidos) {
+    DrivePedidos.onChange(renderDriveStatus);
+    // Sube en segundo plano lo que quedó pendiente, solo si la sesión de Google sigue abierta
+    if (driveOn() && DrivePedidos.status().active && pendingDrive().length) syncDrive(pendingDrive(), false);
+  }
 });
 </script>
 </body>
