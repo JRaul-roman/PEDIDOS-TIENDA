@@ -119,6 +119,20 @@ h3{font-size:14px;margin:0 0 8px;font-weight:700}
 .res-code{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;margin-top:2px;font-variant-numeric:tabular-nums}
 .res-code .ic{width:14px;height:14px}
 mark{background:var(--mark);color:var(--mark-ink);border-radius:4px;padding:0 1px}
+.res-main[data-act="pick"]{cursor:pointer}
+/* Producto elegido: resaltado bajo el buscador para escribir la cantidad */
+.picked{margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px;border-radius:16px;border:2px solid var(--primary);background:var(--primary-soft);animation:pick .35s ease}
+.picked[hidden]{display:none}
+@keyframes pick{0%{transform:scale(.98);box-shadow:0 0 0 0 color-mix(in srgb,var(--primary) 45%,transparent)}100%{transform:none;box-shadow:0 0 0 10px transparent}}
+@media (prefers-reduced-motion:reduce){.picked{animation:none}}
+.picked .p-main{flex:1 1 200px;min-width:0}
+.picked .p-label{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--primary)}
+.picked .p-desc{font-weight:700;font-size:15px;overflow-wrap:anywhere}
+.picked .p-code{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.picked .p-qty{display:flex;align-items:center;gap:8px}
+.picked .p-qty label{font-size:12px;font-weight:700;color:var(--muted)}
+.picked .p-qty input{width:88px;height:46px;text-align:center;font-weight:800;font-size:20px;border:2px solid var(--primary);border-radius:12px;background:var(--surface);outline:none;-moz-appearance:textfield;font-variant-numeric:tabular-nums}
+.picked .p-qty input::-webkit-outer-spin-button,.picked .p-qty input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .sec-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:4px 2px 8px;display:flex;align-items:center;gap:6px}
 .sec-title .ic{width:15px;height:15px}
 
@@ -296,6 +310,7 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
         <input id="search" type="search" placeholder="Busca por nombre o código…" autocomplete="off" enterkeyhint="search" aria-label="Buscar producto">
         <button class="scan-btn" id="btn-scan" title="Escanear código de barras"><i data-ic="scan"></i><span>Escanear</span></button>
       </div>
+      <div class="picked" id="picked" hidden></div>
       <div class="res-meta"><span id="res-count"></span><span class="kbd-hint">Lector de códigos o Enter = añadir directo</span></div>
       <div id="results"></div>
     </div>
@@ -672,7 +687,7 @@ const lineOf = p => S.items.find(it => itemKey(it.description, it.barcode) === i
 function resultRow(p) {
   const line = lineOf(p), q = line ? line.quantity : 0;
   return `<li class="res${q ? ' in-order' : ''}" data-i="${p.i}">
-    <div class="res-main"><div class="res-desc">${highlight(p.d, S.tokens)}</div>
+    <div class="res-main" data-act="pick"><div class="res-desc">${highlight(p.d, S.tokens)}</div>
     <div class="res-code">${p.c ? icon('barcode') + esc(p.c) : '<i>sin código</i>'}</div></div>
     ${q ? stepperHTML(q) : `<button class="btn btn-add" data-act="add">${icon('plus')}<span>Añadir</span></button>`}
   </li>`;
@@ -729,6 +744,45 @@ function runSearch() {
 
 function refreshResultRows() {
   $$('#results li[data-i]').forEach(li => { li.outerHTML = resultRow(S.catalog[+li.dataset.i]); });
+  syncPicked();
+}
+
+/* ---------- Producto elegido: se resalta, se escribe la cantidad y el buscador queda limpio ---------- */
+let picked = null;
+function pickProduct(p, focusQty = true) {
+  if (!lineOf(p)) addProduct(p, 1);
+  picked = p;
+  const search = $('#search');
+  search.value = ''; runSearch();
+  const box = $('#picked');
+  box.innerHTML = `<div class="p-main"><div class="p-label">Seleccionado</div><div class="p-desc">${esc(p.d)}</div><div class="p-code">${p.c ? esc(p.c) : 'sin código'}</div></div>
+    <div class="p-qty"><label for="picked-qty">Cantidad</label><input id="picked-qty" type="number" inputmode="numeric" min="0" enterkeyhint="done"><button class="btn btn-primary" data-act="picked-ok">Listo</button></div>`;
+  box.hidden = false;
+  box.style.animation = 'none'; void box.offsetWidth; box.style.animation = '';
+  syncPicked();
+  if (focusQty) { const q = $('#picked-qty'); q.focus(); q.select(); }
+}
+function syncPicked() {
+  const box = $('#picked'); if (!box || !picked) return;
+  const line = lineOf(picked);
+  if (!line) { closePicked(false); return; }
+  const q = $('#picked-qty');
+  if (q && document.activeElement !== q) q.value = line.quantity;
+}
+function commitPicked() {
+  const q = $('#picked-qty'); if (!picked || !q) return;
+  const idx = S.items.indexOf(lineOf(picked));
+  if (idx >= 0 && q.value !== '' && Number(q.value) !== S.items[idx].quantity) setQty(idx, q.value);
+}
+function closePicked(toSearch = true) {
+  const box = $('#picked');
+  const p = picked; picked = null;
+  if (box) { box.hidden = true; box.innerHTML = ''; }
+  if (toSearch) {
+    const line = p && lineOf(p);
+    if (line) toast(`Añadido: ${p.d} (${line.quantity})`, { type: 'ok', timeout: 2200 });
+    $('#search').focus();
+  }
 }
 
 /* ---------- Pedido ---------- */
@@ -1200,7 +1254,11 @@ function bind() {
       const p = /^\d+$/.test(q) ? findByCode(q) : null;
       if (!p) runSearch();
       const target = p || (S.lastResults.length === 1 ? S.lastResults[0] : null);
-      if (target) { const it = addProduct(target, 1); search.value = ''; runSearch(); toast(`Añadido: ${target.d} (${it.quantity})`, { type: 'ok', timeout: 2200 }); }
+      if (target) {
+        const it = addProduct(target, 1);
+        pickProduct(target, false); // se resalta, pero el foco sigue en el buscador para el lector de códigos
+        toast(`Añadido: ${target.d} (${it.quantity})`, { type: 'ok', timeout: 2200 });
+      }
       else if (/^\d+$/.test(q)) beep(false);
     } else if (e.key === 'Escape') { search.value = ''; runSearch(); }
   });
@@ -1224,8 +1282,16 @@ function bind() {
     const li = btn.closest('li[data-i]'); if (!li) return;
     const p = S.catalog[+li.dataset.i];
     const idx = S.items.indexOf(lineOf(p));
-    if (act === 'add' || act === 'inc') addProduct(p, 1);
+    if (act === 'add' || act === 'pick') pickProduct(p);
+    else if (act === 'inc') addProduct(p, 1);
     else if (act === 'dec' && idx >= 0) setQty(idx, S.items[idx].quantity - 1);
+  });
+  $('#picked').addEventListener('click', e => { if (e.target.closest('[data-act="picked-ok"]')) { commitPicked(); closePicked(); } });
+  $('#picked').addEventListener('change', e => { if (e.target.id === 'picked-qty') commitPicked(); });
+  $('#picked').addEventListener('keydown', e => {
+    if (e.target.id !== 'picked-qty') return;
+    if (e.key === 'Enter') { e.preventDefault(); commitPicked(); closePicked(); }
+    else if (e.key === 'Escape') { closePicked(); }
   });
   $('#results').addEventListener('change', e => {
     if (e.target.dataset.act !== 'qty') return;
