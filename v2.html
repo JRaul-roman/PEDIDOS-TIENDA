@@ -145,6 +145,7 @@ mark{background:var(--mark);color:var(--mark-ink);border-radius:4px;padding:0 1p
 .btn-primary:hover{filter:brightness(1.07)}
 .btn-add{background:var(--primary);border-color:var(--primary);color:var(--primary-ink);padding:8px 12px}
 .btn-ghost{background:transparent}
+.btn-wa{background:#25D366;border-color:#25D366;color:#06351b}
 .btn-danger{color:var(--danger)}
 .btn[disabled]{opacity:.45;pointer-events:none}
 .icon-btn{width:38px;height:38px;border-radius:12px;border:0;background:transparent;display:grid;place-items:center;color:var(--muted)}
@@ -331,6 +332,7 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
       <label class="field notes"><span>Notas para el proveedor</span><textarea id="notes" rows="2" placeholder="Ej: entregar el martes por la mañana"></textarea></label>
       <div class="order-actions">
         <button class="btn btn-primary" id="btn-save"><i data-ic="save"></i>Guardar</button>
+        <button class="btn btn-wa" id="btn-wa-me" title="Enviar el pedido por WhatsApp al 620 879 678"><i data-ic="msg"></i>WhatsApp a mi móvil</button>
         <div class="menu-wrap">
           <button class="btn" data-menu="menu-share"><i data-ic="send"></i>Enviar</button>
           <div class="menu" id="menu-share" hidden>
@@ -832,7 +834,7 @@ function renderOrder() {
   if (!n) { st.textContent = ''; st.className = 'pill'; }
   else if (S.editingId && !S.dirty) { st.textContent = '✓ Guardado'; st.className = 'pill ok'; }
   else { st.textContent = S.editingId ? 'Cambios sin guardar' : 'Sin guardar'; st.className = 'pill warn'; }
-  $$('#btn-save, [data-menu="menu-share"], [data-menu="menu-export"]').forEach(b => b.disabled = !n);
+  $$('#btn-save, #btn-wa-me, [data-menu="menu-share"], [data-menu="menu-export"]').forEach(b => b.disabled = !n);
   $('#order-list').innerHTML = n
     ? S.items.map((it, idx) => `<li class="line" data-idx="${idx}" data-key="${esc(itemKey(it.description, it.barcode))}">
         <div class="line-main"><div class="line-desc">${esc(it.description)}</div><div class="line-code">${esc(it.barcode || 'sin código')}</div></div>
@@ -1104,10 +1106,13 @@ function whatsappPhone(contact) {
   if (/^[6789]\d{8}$/.test(d)) d = '34' + d;
   return d.length >= 10 ? d : '';
 }
+// Móvil propio al que se manda el pedido con el botón "WhatsApp a mi móvil"
+const MY_WHATSAPP = '34620879678';
 async function shareOrder(kind, o) {
   const text = orderText(o);
-  if (kind === 'whatsapp') {
-    window.open(`https://wa.me/${whatsappPhone(o.provider?.contact)}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+  if (kind === 'whatsapp' || kind === 'whatsapp-me') {
+    const phone = kind === 'whatsapp-me' ? MY_WHATSAPP : whatsappPhone(o.provider?.contact);
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
   } else if (kind === 'native' && navigator.share) {
     try { await navigator.share({ title: 'Pedido', text }); } catch {}
   } else {
@@ -1333,6 +1338,7 @@ function bind() {
   $('#notes').addEventListener('input', e => { S.notes = e.target.value; persist(); });
 
   $('#btn-save').addEventListener('click', saveOrder);
+  $('#btn-wa-me').addEventListener('click', () => shareOrder('whatsapp-me', currentOrder()));
   $('#btn-new').addEventListener('click', newOrder);
   $('#btn-scan').addEventListener('click', openScanner);
   $('#nav-scan').addEventListener('click', openScanner);
