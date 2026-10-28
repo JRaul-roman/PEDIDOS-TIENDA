@@ -5,6 +5,8 @@
   'use strict';
   // ID de cliente OAuth de Google (no es secreto). Mientras esté vacío, el guardado en Drive está desactivado.
   const CLIENT_ID = '472590921346-26boo4n0bj8lvbt6eggsrp9u0dd7cuuk.apps.googleusercontent.com';
+  // Cuenta de Google donde se guardan los pedidos de las dos apps. Drive queda activado por defecto con ella.
+  const ACCOUNT = 'jraulroman@gmail.com';
   const SCOPE = 'https://www.googleapis.com/auth/drive.file';
   const ROOT_NAME = 'PEDIDOS';
   const KEY = 'drivePedidos';
@@ -30,18 +32,35 @@
 
   const tokenValid = () => st.token && st.expires && Date.now() < st.expires - 60000;
 
+  // Comprueba que el permiso se ha dado con ACCOUNT; si es otra cuenta, lo anula para no guardar en otro Drive.
+  async function checkAccount(token) {
+    let email = '';
+    try {
+      const res = await fetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', { headers: { Authorization: 'Bearer ' + token } });
+      if (res.ok) email = ((await res.json()).user?.emailAddress || '').toLowerCase();
+    } catch {}
+    if (!email) return;
+    if (email !== ACCOUNT) {
+      google.accounts.oauth2.revoke(token, () => {});
+      throw new Error(`Has elegido ${email}. Los pedidos se guardan en ${ACCOUNT}: vuelve a intentarlo con esa cuenta`);
+    }
+    if (st.account !== email) { st.account = email; st.folders = {}; }
+  }
+
   function getToken(interactive) {
     if (tokenValid()) return Promise.resolve(st.token);
     if (!interactive) return Promise.reject(new Error('Sesión de Google caducada'));
     if (!window.google?.accounts?.oauth2) return loadGis().then(() => getToken(true));
     if (!tokenClient) {
       tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID, scope: SCOPE,
+        client_id: CLIENT_ID, scope: SCOPE, login_hint: ACCOUNT,
         callback: r => {
           const p = pending; pending = null;
           if (r.error) return p && p.reject(new Error('Google no dio permiso: ' + r.error));
-          st.token = r.access_token; st.expires = Date.now() + (r.expires_in || 3600) * 1000; st.connected = true;
-          save(st); emit(); p && p.resolve(st.token);
+          checkAccount(r.access_token).then(() => {
+            st.token = r.access_token; st.expires = Date.now() + (r.expires_in || 3600) * 1000; st.connected = true; delete st.off;
+            save(st); emit(); p && p.resolve(st.token);
+          }, e => p && p.reject(e));
         },
         error_callback: e => { const p = pending; pending = null; p && p.reject(new Error(e?.type === 'popup_closed' ? 'Ventana de Google cerrada' : 'No se pudo abrir Google')); }
       });
@@ -94,16 +113,17 @@
 
   const api = {
     configured: () => !!CLIENT_ID,
-    status: () => ({ configured: !!CLIENT_ID, connected: !!st.connected, active: !!tokenValid() }),
+    // Conectado por defecto (con ACCOUNT) salvo que se haya pulsado Desconectar en este navegador.
+    status: () => ({ configured: !!CLIENT_ID, connected: !st.off, active: !!tokenValid(), account: ACCOUNT }),
     onChange: fn => { listeners.add(fn); return () => listeners.delete(fn); },
     // Llamar dentro de un clic: abre la ventana de Google si hace falta.
     connect: () => getToken(true),
     disconnect() {
       if (st.token && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(st.token, () => {});
-      st = {}; save(st); emit();
+      st = { off: true }; save(st); emit();
     },
     // Prepara el permiso al pulsar Guardar (dentro del clic). Devuelve una promesa.
-    ensure: interactive => (CLIENT_ID && st.connected) ? getToken(interactive) : Promise.reject(new Error('Drive no conectado')),
+    ensure: interactive => (CLIENT_ID && !st.off) ? getToken(interactive) : Promise.reject(new Error('Drive no conectado')),
     /** Crea (o encuentra) PEDIDOS/<subfolder> en Drive. Devuelve el id de la subcarpeta. */
     async prepare(subfolder) { return folder(subfolder, await folder(ROOT_NAME, 'root')); },
     /** Sube (o reemplaza) un PDF en PEDIDOS/<subfolder>. Devuelve el id del archivo en Drive. */

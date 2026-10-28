@@ -248,6 +248,7 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
 .scan-status{background:rgba(255,255,255,.08);border-radius:14px;padding:12px;font-size:14px;text-align:center;min-height:46px}
 .scan-status.ok{background:rgba(16,185,129,.2);color:#a7f3d0}
 .scan-status.err{background:rgba(239,68,68,.2);color:#fecaca}
+#scan-pick[hidden]{display:none}
 .switch{display:flex;gap:10px;align-items:center;font-size:13px;color:#cbd5e1}
 .switch input{width:20px;height:20px;accent-color:#8b5cf6}
 .btn-light{background:#fff;color:#0b1020;border-color:#fff}
@@ -412,6 +413,7 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
     <div class="scan-top"><b>Escanear código de barras</b><button class="icon-btn" data-close aria-label="Cerrar"><i data-ic="x"></i></button></div>
     <div id="reader"></div>
     <div class="scan-status" id="scan-status">Apunta la cámara al código de barras</div>
+    <button class="btn btn-primary" id="scan-pick" hidden>Seleccionar y poner cantidad</button>
     <label class="switch"><input type="checkbox" id="scan-burst"><span><b>Modo ráfaga:</b> cada lectura suma 1 unidad y sigue escaneando</span></label>
     <button class="btn btn-light" data-close>Terminar</button>
   </div>
@@ -1042,7 +1044,7 @@ function renderDriveStatus() {
   const st = DrivePedidos.status(), pend = pendingDrive().length;
   if (!st.configured) { box.innerHTML = '<p class="help">Pendiente de configurar el permiso de Google.</p>'; return; }
   box.innerHTML = st.connected
-    ? `<p class="help">✓ Conectado. Cada pedido que guardes se sube en PDF a <b>PEDIDOS / ${DRIVE_FOLDER}</b> de tu Drive.${pend ? ` Pendientes de subir: <b>${pend}</b>.` : ''}</p>
+    ? `<p class="help">✓ Conectado a <b>${esc(st.account)}</b>. Cada pedido que guardes se sube en PDF a <b>PEDIDOS / ${DRIVE_FOLDER}</b> de ese Drive (la primera vez Google pedirá permiso).${pend ? ` Pendientes de subir: <b>${pend}</b>.` : ''}</p>
        <div class="row-btns">${pend ? `<button class="btn btn-primary" data-drive="sync">${icon('upload')}Subir pendientes</button>` : ''}
        <button class="btn" data-drive="all">${icon('upload')}Subir todo el historial</button>
        <button class="btn btn-danger" data-drive="off">Desconectar</button></div>`
@@ -1119,7 +1121,7 @@ function runExport(fmt, o) {
 }
 
 /* ---------- Escáner ---------- */
-let scanner = null, lastScan = { code: '', t: 0 }, actx = null;
+let scanner = null, lastScan = { code: '', t: 0 }, actx = null, scanPick = null;
 function beep(ok = true) {
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)();
@@ -1136,6 +1138,7 @@ async function openScanner() {
   if (!window.Html5Qrcode) return toast('No se pudo cargar el escáner (¿sin conexión?).', { type: 'err' });
   $('#scan-burst').checked = S.cfg.burst;
   scanStatus('Apunta la cámara al código de barras');
+  showScanPick(null);
   $('#dlg-scan').showModal();
   try {
     const F = window.Html5QrcodeSupportedFormats;
@@ -1163,6 +1166,7 @@ function onScan(text) {
   if (!p) {
     beep(false);
     scanStatus(`El código ${text} no está en el catálogo`, 'err');
+    showScanPick(null);
     if (!S.cfg.burst) { $('#dlg-scan').close(); $('#search').value = text; setView('buscar'); runSearch(); }
     return;
   }
@@ -1170,12 +1174,15 @@ function onScan(text) {
   if (S.cfg.burst) {
     const it = addProduct(p, 1);
     scanStatus(`✓ ${p.d} — llevas ${it.quantity}`, 'ok');
-  } else {
-    $('#dlg-scan').close();
-    $('#search').value = p.c; setView('buscar'); runSearch();
-    if (!lineOf(p)) addProduct(p, 1);
-    toast(`Añadido: ${p.d}. Ajusta la cantidad si hace falta.`, { type: 'ok' });
-  }
+    showScanPick(p);
+  } else pickScanned(p);
+}
+function showScanPick(p) { scanPick = p; $('#scan-pick').hidden = !p; }
+// Cierra el escáner y deja el producto seleccionado con la cantidad lista para escribir
+function pickScanned(p) {
+  $('#dlg-scan').close();
+  setView('buscar');
+  pickProduct(p);
 }
 
 /* ---------- Vistas, ajustes, copias ---------- */
@@ -1347,6 +1354,7 @@ function bind() {
   });
   $('#dlg-scan').addEventListener('close', stopScanner);
   $('#scan-burst').addEventListener('change', e => { S.cfg.burst = e.target.checked; saveCfg(); });
+  $('#scan-pick').addEventListener('click', () => { if (scanPick) pickScanned(scanPick); });
 
   $('#btn-history').addEventListener('click', () => { renderHistory(); $('#dlg-history').showModal(); });
   $('#hist-search').addEventListener('input', renderHistory);
