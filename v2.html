@@ -305,7 +305,6 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
         <label class="field"><span>Contacto</span><input id="prov-contact" placeholder="Teléfono o email" autocomplete="off"></label>
       </div>
       <datalist id="prov-list"></datalist>
-      <div class="chips" id="prov-chips"></div>
     </div>
 
     <div class="card">
@@ -904,10 +903,8 @@ function rememberProvider(p) {
   store.set(K.prov, S.providers);
   renderProviderChips(); renderSettingsProviders();
 }
+// Sin etiquetas de proveedores bajo el nombre: solo la lista de sugerencias al escribir.
 function renderProviderChips() {
-  const cur = norm(S.provider.name.trim());
-  $('#prov-chips').innerHTML = S.providers.slice(0, 8).map((p, i) =>
-    `<button class="chip${norm(p.name) === cur ? ' active' : ''}" data-p="${i}" style="--h:${hue(p.name)}"><span class="dot"></span>${esc(p.name)}</button>`).join('');
   $('#prov-list').innerHTML = S.providers.map(p => `<option value="${esc(p.name)}"></option>`).join('');
 }
 function selectProvider(p) {
@@ -1340,7 +1337,6 @@ function bind() {
     runSearch();
   });
   $('#prov-contact').addEventListener('input', e => { S.provider.contact = e.target.value; persist(); });
-  $('#prov-chips').addEventListener('click', e => { const c = e.target.closest('[data-p]'); if (c) selectProvider(S.providers[+c.dataset.p]); });
   $('#notes').addEventListener('input', e => { S.notes = e.target.value; persist(); });
 
   $('#btn-save').addEventListener('click', saveOrder);
