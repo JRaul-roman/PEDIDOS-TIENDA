@@ -884,13 +884,9 @@ function saveOrder() {
   S.history = S.history.slice(0, 300);
   if (!store.set(K.hist, S.history)) toast('No se pudo guardar: la memoria del navegador está llena. Descarga una copia y borra pedidos antiguos.', { type: 'err', timeout: 8000 });
   rememberProvider(provider);
-  // Guardado: la pantalla se queda en blanco para el siguiente pedido (el guardado sigue en el historial).
-  const saved = { items: order.items.map(i => ({ ...i })), provider: { ...provider }, notes: S.notes, editingId: order.id, dirty: false };
-  S.items = []; S.provider = { name: '', contact: '' }; S.notes = ''; S.editingId = null; S.dirty = false;
-  $('#search').value = '';
-  syncInputs(); persist(false); renderHistory(); runSearch(); setView('buscar');
-  toast(existing ? 'Pedido actualizado en el historial. Ya puedes hacer otro.' : 'Pedido guardado en el historial. Ya puedes hacer otro.', { type: 'ok', action: 'Volver a abrirlo', onAction: () => restore(saved) });
-  $('#prov-name').focus();
+  S.editingId = order.id; S.dirty = false;
+  persist(false); renderHistory();
+  toast(existing ? 'Pedido actualizado en el historial' : 'Pedido guardado en el historial', { type: 'ok', action: 'Nuevo pedido', onAction: newOrder });
   syncDrive([order], true);
 }
 
@@ -1419,9 +1415,7 @@ document.addEventListener('DOMContentLoaded', () => {
   S.history = store.get(K.hist, []).map(normalizeOrder);
   S.providers = store.get(K.prov, []);
   const migrated = migrateOld();
-  let d = store.get(K.draft, null);
-  // Un pedido ya guardado y sin cambios está en el historial: al abrir se empieza uno en blanco.
-  if (d && d.editingId && !d.dirty) { d = null; store.set(K.draft, { items: [], provider: { name: '', contact: '' }, notes: '', editingId: null, dirty: false }); }
+  const d = store.get(K.draft, null);
   if (d) { S.items = (d.items || []).map(i => ({ ...i })); S.provider = d.provider || S.provider; S.notes = d.notes || ''; S.editingId = d.editingId || null; S.dirty = !!d.dirty; }
   syncInputs(); renderOrder(); renderSettingsProviders();
   const cached = store.get(K.cat, null);
