@@ -66,6 +66,7 @@ h3{font-size:14px;margin:0 0 8px;font-weight:700}
 .hero-actions{margin-left:auto;display:flex;gap:8px}
 .hbtn{width:44px;height:44px;border-radius:15px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.14);color:#fff;display:grid;place-items:center;transition:background .15s}
 .hbtn:hover{background:rgba(255,255,255,.26)}
+.hbtn-text{width:auto;padding:0 14px;display:flex;align-items:center;gap:6px;font:inherit;font-weight:700;font-size:14px;white-space:nowrap}
 .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:18px}
 .stat{background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.2);border-radius:16px;padding:10px 12px;min-width:0}
 .stat b{display:block;font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1.2}
@@ -282,6 +283,7 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
         <p id="cat-status">Cargando catálogo…</p>
       </div>
       <div class="hero-actions">
+        <button class="hbtn hbtn-text" id="btn-new-top" title="Empezar un pedido nuevo"><i data-ic="filePlus"></i>Nuevo pedido</button>
         <button class="hbtn" id="btn-history" title="Historial de pedidos" aria-label="Historial"><i data-ic="history"></i></button>
         <button class="hbtn" id="btn-settings" title="Ajustes" aria-label="Ajustes"><i data-ic="settings"></i></button>
       </div>
@@ -883,9 +885,13 @@ function saveOrder() {
   S.history = S.history.slice(0, 300);
   if (!store.set(K.hist, S.history)) toast('No se pudo guardar: la memoria del navegador está llena. Descarga una copia y borra pedidos antiguos.', { type: 'err', timeout: 8000 });
   rememberProvider(provider);
-  S.editingId = order.id; S.dirty = false;
-  persist(false); renderHistory();
-  toast(existing ? 'Pedido actualizado en el historial' : 'Pedido guardado en el historial', { type: 'ok', action: 'Nuevo pedido', onAction: newOrder });
+  // Guardado: la pantalla se queda en blanco para el siguiente pedido (el guardado sigue en el historial).
+  const saved = { items: order.items.map(i => ({ ...i })), provider: { ...provider }, notes: S.notes, editingId: order.id, dirty: false };
+  S.items = []; S.provider = { name: '', contact: '' }; S.notes = ''; S.editingId = null; S.dirty = false;
+  $('#search').value = '';
+  syncInputs(); persist(false); renderHistory(); runSearch(); setView('buscar');
+  toast(existing ? 'Pedido actualizado en el historial. Ya puedes hacer otro.' : 'Pedido guardado en el historial. Ya puedes hacer otro.', { type: 'ok', action: 'Volver a abrirlo', onAction: () => restore(saved) });
+  $('#prov-name').focus();
   syncDrive([order], true);
 }
 
@@ -1340,6 +1346,7 @@ function bind() {
   $('#btn-save').addEventListener('click', saveOrder);
   $('#btn-wa-me').addEventListener('click', () => shareOrder('whatsapp-me', currentOrder()));
   $('#btn-new').addEventListener('click', newOrder);
+  $('#btn-new-top').addEventListener('click', newOrder);
   $('#btn-scan').addEventListener('click', openScanner);
   $('#nav-scan').addEventListener('click', openScanner);
   $$('.bottomnav [data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
@@ -1416,7 +1423,9 @@ document.addEventListener('DOMContentLoaded', () => {
   S.history = store.get(K.hist, []).map(normalizeOrder);
   S.providers = store.get(K.prov, []);
   const migrated = migrateOld();
-  const d = store.get(K.draft, null);
+  let d = store.get(K.draft, null);
+  // Un pedido ya guardado y sin cambios está en el historial: al abrir se empieza uno en blanco.
+  if (d && d.editingId && !d.dirty) { d = null; store.set(K.draft, { items: [], provider: { name: '', contact: '' }, notes: '', editingId: null, dirty: false }); }
   if (d) { S.items = (d.items || []).map(i => ({ ...i })); S.provider = d.provider || S.provider; S.notes = d.notes || ''; S.editingId = d.editingId || null; S.dirty = !!d.dirty; }
   syncInputs(); renderOrder(); renderSettingsProviders();
   const cached = store.get(K.cat, null);
