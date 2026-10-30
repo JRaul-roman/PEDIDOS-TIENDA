@@ -188,7 +188,9 @@ b.final{font-size:15px}
 <script type="module">
 // Gemini de Google: plan gratuito con límite diario. Los modelos se piden a Google con la clave
 // (los más nuevos primero); esta lista solo se usa si esa consulta falla.
-const MODELOS = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
+const MODELOS = ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.6-flash'];
+const ESPERA_MAX = 45000;   // si un modelo tarda más, se corta y se prueba el siguiente (el lite es el más rápido)
+let leyendoCon = '';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n == null || isNaN(n)) ? '' : n.toFixed(2).replace('.', ',');
@@ -419,7 +421,7 @@ const sinAdicionales = o => Array.isArray(o) ? o.map(sinAdicionales) : (o && typ
 // (el formato va entonces explicado en el texto). Solo se rinde ante una clave no válida.
 const version = id => parseFloat((id.match(/gemini-(\d+(?:\.\d+)?)/) || [])[1]) || 0;
 async function modelosGemini(clave) {
-  const c = lsGet('modelosGemini', null);
+  const c = lsGet('modelosGemini2', null);
   if (c && Date.now() - c.t < 86400000 && c.m.length) return c.m;
   try {
     const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', { headers: { 'x-goog-api-key': clave } });
@@ -430,10 +432,12 @@ async function modelosGemini(clave) {
     // Solo los "flash" normales (ni audio, ni imagen, ni vista previa), los más nuevos antes; los antiguos (2.x) solo si no hay otros
     const flash = ids.filter(id => /^gemini-\d+(\.\d+)?-flash(-lite)?$/.test(id));
     const nuevos = flash.filter(id => version(id) >= 3);
-    const m = (nuevos.length ? nuevos : flash)
-      .sort((a, b) => version(b) - version(a) || (a.endsWith('-lite') - b.endsWith('-lite'))).slice(0, 3);
+    const orden = (nuevos.length ? nuevos : flash).sort((a, b) => version(b) - version(a));
+    const completos = orden.filter(id => !id.endsWith('-lite')), lite = orden.filter(id => id.endsWith('-lite'));
+    // El mejor normal; si tarda o falla, el lite más nuevo (rápido); y por último el siguiente normal
+    const m = [completos[0], lite[0], completos[1]].filter(Boolean);
     if (!m.length) return MODELOS;
-    lsSet('modelosGemini', { t: Date.now(), m });
+    lsSet('modelosGemini2', { t: Date.now(), m });
     return m;
   } catch { return MODELOS; }
 }
@@ -445,15 +449,24 @@ async function pedirGemini(clave, cuerpo) {
   const modelos = await modelosGemini(clave);
   for (const modelo of modelos) {
     for (const c of [cuerpo, simple]) {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave }, body: JSON.stringify(c)
-      });
+      leyendoCon = modelo;
+      const corte = new AbortController(), t = setTimeout(() => corte.abort(), ESPERA_MAX);
+      let r;
+      try {
+        r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave }, body: JSON.stringify(c), signal: corte.signal
+        });
+      } catch (e) {
+        if (e.name !== 'AbortError') throw e;
+        ultimo = Object.assign(new Error(`${modelo} ha tardado más de ${ESPERA_MAX / 1000} s`), { status: 504 });
+        break;   // demasiado lento: siguiente modelo
+      } finally { clearTimeout(t); }
       const j = await r.json().catch(() => ({}));
       if (r.ok) return j;
       ultimo = Object.assign(new Error(`${modelo}: ${j.error?.message || 'error ' + r.status}`), { status: r.status, info: j.error });
       console.warn('Gemini', modelo, r.status, j.error);
       if (/API key not valid|API_KEY_INVALID/i.test(j.error?.message || '') || [401, 403].includes(r.status)) throw ultimo;
-      if (r.status === 404) { try { localStorage.removeItem('modelosGemini'); } catch {} }
+      if (r.status === 404) { try { localStorage.removeItem('modelosGemini2'); } catch {} }
       if (r.status !== 400) break;   // 404, 429, 5xx…: pasar al siguiente modelo
     }
   }
@@ -466,7 +479,8 @@ async function leerFactura() {
   if (!archivos.length) { toast('Añade primero las fotos o el PDF de la factura'); return; }
   const btn = $('#btn-leer'); btn.disabled = true;
   const inicio = Date.now();
-  const reloj = setInterval(() => estado(`Leyendo la factura… ${Math.round((Date.now() - inicio) / 1000)} s`), 1000);
+  leyendoCon = '';
+  const reloj = setInterval(() => estado(`Leyendo la factura${leyendoCon ? ' con ' + leyendoCon.replace('gemini-', 'Gemini ') : ''}… ${Math.round((Date.now() - inicio) / 1000)} s`), 1000);
   estado('Leyendo la factura…');
   try {
     const partes = archivos.map(a => ({ inlineData: { mimeType: a.type, data: a.data } }));
@@ -500,6 +514,7 @@ async function leerFactura() {
       : /location is not supported/i.test(m) ? 'Google no permite usar su IA gratuita desde esta conexión (¿VPN activada?). Desactiva la VPN y vuelve a intentarlo.'
       : s === 403 ? 'Google no deja usar la clave: ' + m
       : s === 429 ? 'Has llegado al límite gratuito de Google por ahora. Espera un rato (o hasta mañana) y vuelve a intentarlo.'
+      : s === 504 ? 'Google va muy lento ahora mismo con su IA gratuita. Vuelve a intentarlo en unos minutos.'
       : s >= 500 ? 'Google no responde ahora mismo. Vuelve a intentarlo en un momento.'
       : e instanceof SyntaxError ? 'La respuesta ha llegado incompleta. Vuelve a pulsar Leer factura.'
       : 'No se pudo leer: ' + m, 'error');
