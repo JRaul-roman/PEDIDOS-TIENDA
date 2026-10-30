@@ -150,7 +150,7 @@ b.final{font-size:15px}
       <button class="btn primary" id="btn-drive" style="flex:1">Guardar en Drive</button>
       <button class="btn" id="btn-pdf">Descargar PDF</button>
     </div>
-    <p class="small muted" style="margin:10px 0 0">Se guarda en Drive en FACTURAS / proveedor: las fotos o el PDF de la factura y un PDF con los precios calculados.</p>
+    <p class="small muted" style="margin:10px 0 0">Se guarda en Drive en la carpeta FACTURAS DE COMPRA, con una carpeta por proveedor: las fotos o el PDF de la factura y un PDF con los precios calculados.</p>
   </section>
 
   <section class="card hist" id="card-hist">
@@ -636,8 +636,9 @@ $('#btn-drive').addEventListener('click', async () => {
   try {
     const token = await DrivePedidos.ensure(true);   // abre la ventana de Google si hace falta (dentro del clic)
     btn.textContent = 'Guardando…';
-    const raiz = await carpeta(token, 'FACTURAS', 'root');
-    const prov = await carpeta(token, (F.proveedor || 'Sin proveedor').replace(/[\\/]+/g, '-').trim(), raiz);
+    const raiz = await carpeta(token, 'FACTURAS DE COMPRA', 'root');
+    // Una carpeta por proveedor, en mayúsculas para que "Zamorano" y "ZAMORANO" vayan a la misma
+    const prov = await carpeta(token, (F.proveedor || 'Sin proveedor').replace(/[\\/]+/g, '-').replace(/\s+/g, ' ').trim().toUpperCase(), raiz);
     const base = nombreBase();
     for (const [i, a] of archivos.entries()) {
       const ext = a.type === 'application/pdf' ? 'pdf' : 'jpg';
