@@ -414,16 +414,24 @@ const estado = (msg, tipo = 'info') => { const e = $('#estado'); if (!msg) retur
 const sinAdicionales = o => Array.isArray(o) ? o.map(sinAdicionales) : (o && typeof o === 'object')
   ? Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'additionalProperties').map(([k, v]) => [k, sinAdicionales(v)])) : o;
 
+// Prueba cada modelo primero con el esquema de respuesta y, si Google lo rechaza (400), sin él
+// (el formato va entonces explicado en el texto). Solo se rinde ante una clave no válida.
 async function pedirGemini(clave, cuerpo) {
+  const simple = { ...cuerpo, generationConfig: { responseMimeType: 'application/json', maxOutputTokens: cuerpo.generationConfig.maxOutputTokens },
+    contents: [{ role: 'user', parts: [...cuerpo.contents[0].parts, { text: 'Responde solo con un JSON que siga exactamente este esquema: ' + JSON.stringify(cuerpo.generationConfig.responseSchema) }] }] };
   let ultimo;
   for (const modelo of MODELOS) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave }, body: JSON.stringify(cuerpo)
-    });
-    const j = await r.json().catch(() => ({}));
-    if (r.ok) return j;
-    ultimo = Object.assign(new Error(j.error?.message || 'Error ' + r.status), { status: r.status, info: j.error });
-    if (![404, 429, 503].includes(r.status)) break;   // otro modelo solo si este no existe, está saturado o agotó su cupo gratis
+    for (const c of [cuerpo, simple]) {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave }, body: JSON.stringify(c)
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) return j;
+      ultimo = Object.assign(new Error(`${modelo}: ${j.error?.message || 'error ' + r.status}`), { status: r.status, info: j.error });
+      console.warn('Gemini', modelo, r.status, j.error);
+      if (/API key not valid|API_KEY_INVALID/i.test(j.error?.message || '') || [401, 403].includes(r.status)) throw ultimo;
+      if (r.status !== 400) break;   // 404, 429, 5xx…: pasar al siguiente modelo
+    }
   }
   throw ultimo;
 }
@@ -459,7 +467,9 @@ async function leerFactura() {
     $('#card-datos').scrollIntoView({ behavior: 'smooth' });
   } catch (e) {
     const s = e?.status, m = e?.message || String(e);
-    estado(/API key not valid|API_KEY_INVALID/i.test(m) || s === 401 || s === 403 ? 'La clave de Google no es válida. Revísala en Ajustes.'
+    estado(/API key not valid|API_KEY_INVALID/i.test(m) || s === 401 ? 'La clave de Google no es válida. Revísala en Ajustes (cópiala entera otra vez).'
+      : /location is not supported/i.test(m) ? 'Google no permite usar su IA gratuita desde esta conexión (¿VPN activada?). Desactiva la VPN y vuelve a intentarlo.'
+      : s === 403 ? 'Google no deja usar la clave: ' + m
       : s === 429 ? 'Has llegado al límite gratuito de Google por ahora. Espera un rato (o hasta mañana) y vuelve a intentarlo.'
       : s >= 500 ? 'Google no responde ahora mismo. Vuelve a intentarlo en un momento.'
       : e instanceof SyntaxError ? 'La respuesta ha llegado incompleta. Vuelve a pulsar Leer factura.'
