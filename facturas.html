@@ -130,10 +130,10 @@ b.final{font-size:15px}
     </div>
     <div id="estado" class="status info hidden" style="margin-top:12px"></div>
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-      <p class="small muted" style="margin:0 0 8px">O hazlo con Claude (gratis con tu suscripción): copia las instrucciones, pégalas en Claude junto con la foto y luego pega aquí su respuesta.</p>
+      <p class="small muted" style="margin:0 0 8px">O hazlo con Claude (gratis con tu suscripción): pulsa <b>Enviar a Claude</b>, elige la app de Claude y envía el mensaje. Cuando conteste, pulsa el botón de <b>copiar</b> de su respuesta y vuelve aquí: se carga sola.</p>
       <div class="row">
-        <button class="btn sm" id="btn-claude-copiar">1. Copiar instrucciones y abrir Claude</button>
-        <button class="btn sm" id="btn-claude-pegar">2. Pegar respuesta de Claude</button>
+        <button class="btn sm" id="btn-claude-copiar">Enviar a Claude</button>
+        <button class="btn sm" id="btn-claude-pegar">Pegar respuesta a mano</button>
       </div>
     </div>
   </section>
@@ -707,15 +707,49 @@ async function copiar(texto) {
   const t = document.createElement('textarea'); t.value = texto; t.style.position = 'fixed'; t.style.opacity = '0';
   document.body.appendChild(t); t.select(); let ok = false; try { ok = document.execCommand('copy'); } catch {} t.remove(); return ok;
 }
+// Envía la foto y las instrucciones a la app de Claude (menú Compartir del móvil o la tablet).
+// Al volver a esta página se mira el portapapeles: si está la respuesta copiada de Claude, se carga sola.
+let esperandoClaude = false;
 $('#btn-claude-copiar').addEventListener('click', async () => {
-  const ok = await copiar(INSTRUCCIONES_CLAUDE());
-  toast(ok ? 'Instrucciones copiadas: pégalas en Claude y adjunta la foto' : 'No se pudieron copiar las instrucciones');
-  if (ok) window.open('https://claude.ai/new', '_blank', 'noopener');
+  if (!archivos.length) return toast('Añade primero las fotos o el PDF de la factura');
+  const texto = INSTRUCCIONES_CLAUDE();
+  const copiado = await copiar(texto);   // por si Claude no recoge el texto al compartir
+  const ficheros = archivos.map((a, i) => new File([a.blob], a.name || `factura-${i + 1}.${a.type === 'application/pdf' ? 'pdf' : 'jpg'}`, { type: a.type }));
+  esperandoClaude = true;
+  if (navigator.canShare?.({ files: ficheros })) {
+    try {
+      await navigator.share({ files: ficheros, text: texto });
+      toast('Envía el mensaje en Claude. Cuando conteste, copia su respuesta y vuelve aquí');
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') { esperandoClaude = false; return; }
+    }
+  }
+  // Sin menú Compartir (p. ej. en el PC): se abre Claude en el navegador; la foto se adjunta allí
+  toast(copiado ? 'Instrucciones copiadas: pégalas en Claude y adjunta la foto' : 'Abre Claude y adjunta la foto');
+  window.open('https://claude.ai/new', '_blank', 'noopener');
+});
+async function respuestaEnPortapapeles() {
+  try { const t = await navigator.clipboard.readText(); return /\{[\s\S]*"lineas"/.test(t) ? t : ''; } catch { return ''; }
+}
+function cargarRespuesta(t) {
+  const ini = t.indexOf('{'), fin = t.lastIndexOf('}');
+  if (ini < 0 || fin < ini) throw new Error('No encuentro el JSON en lo que has pegado');
+  usarDatos(JSON.parse(t.slice(ini, fin + 1)), 'Claude ha leído');
+  if (!archivos.length) toast('Si quieres guardar también la foto en Drive, añádela arriba antes de guardar');
+}
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible' || !esperandoClaude) return;
+  await new Promise(r => setTimeout(r, 400));
+  const t = await respuestaEnPortapapeles();
+  if (!t) { toast('Cuando Claude conteste, copia su respuesta y vuelve aquí (o pulsa Pegar respuesta a mano)'); return; }
+  try { cargarRespuesta(t); esperandoClaude = false; toast('Respuesta de Claude cargada'); }
+  catch (e) { toast(e instanceof SyntaxError ? 'La respuesta copiada está incompleta: cópiala entera otra vez' : e.message); }
 });
 $('#btn-claude-pegar').addEventListener('click', async () => {
   $('#f-pegar').value = '';
   abrir('#ov-pegar');
-  try { const t = await navigator.clipboard.readText(); if (/\{[\s\S]*"lineas"/.test(t)) $('#f-pegar').value = t; } catch {}
+  $('#f-pegar').value = await respuestaEnPortapapeles();
   $('#f-pegar').focus();
 });
 function usarDatos(d, origen) {
@@ -733,12 +767,10 @@ function usarDatos(d, origen) {
   $('#card-datos').scrollIntoView({ behavior: 'smooth' });
 }
 $('#btn-pegar-usar').addEventListener('click', () => {
-  const t = $('#f-pegar').value, ini = t.indexOf('{'), fin = t.lastIndexOf('}');
   try {
-    if (ini < 0 || fin < ini) throw new Error('No encuentro el JSON en lo que has pegado');
-    usarDatos(JSON.parse(t.slice(ini, fin + 1)), 'Claude ha leído');
+    cargarRespuesta($('#f-pegar').value);
+    esperandoClaude = false;
     cerrar();
-    if (!archivos.length) toast('Si quieres guardar también la foto en Drive, añádela arriba antes de guardar');
   } catch (e) {
     toast(e instanceof SyntaxError ? 'La respuesta está incompleta: cópiala entera otra vez' : e.message);
   }
