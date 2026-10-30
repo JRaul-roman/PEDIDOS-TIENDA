@@ -522,7 +522,8 @@ const FORMATO_JSON = `FORMATO DE RESPUESTA
 Responde solo con un objeto JSON, sin texto alrededor, con esta forma:
 {"proveedor": "", "fecha": "AAAA-MM-DD o vacío", "numero": "", "avisos": ["..."],
  "lineas": [{"descripcion": "", "codigo_barras": "", "cantidad": 0, "precio_base": 0.0, "iva": 0, "categoria": "una de: ${Object.keys(CAT).join(', ')}", "dudoso": false, "motivo": ""}]}
-Los números van con punto decimal (1.25), nunca como texto.`;
+Los números van con punto decimal (1.25), nunca como texto.
+Cada producto de la factura aparece UNA sola vez en "lineas": no repitas líneas ni vuelvas a empezar la lista.`;
 
 function cargarScript(src) {
   return new Promise((ok, mal) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => mal(new Error('No se pudo cargar el lector de PDF')); document.head.appendChild(s); });
@@ -627,18 +628,23 @@ async function leerConGroq(clave) {
 /* El modelo puede devolver campos de más, de menos o con otro tipo: se deja todo en la forma que usa la app */
 function normalizar(d) {
   const num = v => { if (typeof v === 'number') return v; const s = String(v ?? '').trim(); return parseFloat(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s) || 0; };
-  return {
-    proveedor: String(d?.proveedor || ''), fecha: String(d?.fecha || ''), numero: String(d?.numero || ''),
-    avisos: (Array.isArray(d?.avisos) ? d.avisos : []).map(String).filter(Boolean),
-    lineas: (Array.isArray(d?.lineas) ? d.lineas : []).filter(l => l && l.descripcion).map(l => {
-      const ok = !!CAT[l.categoria];
-      return {
-        descripcion: String(l.descripcion), codigo_barras: String(l.codigo_barras || ''), cantidad: num(l.cantidad),
-        precio_base: num(l.precio_base), iva: num(l.iva), categoria: ok ? l.categoria : 'sin_regla',
-        dudoso: !!l.dudoso || !ok, motivo: String(l.motivo || (ok ? '' : 'no sé en qué categoría va'))
-      };
-    })
-  };
+  const avisos = (Array.isArray(d?.avisos) ? d.avisos : []).map(String).filter(Boolean);
+  // Algunos modelos (sobre todo Groq) repiten líneas: el mismo producto al mismo precio se deja una sola vez
+  const vistas = new Set();
+  const lineas = (Array.isArray(d?.lineas) ? d.lineas : []).filter(l => l && l.descripcion).map(l => {
+    const ok = !!CAT[l.categoria];
+    return {
+      descripcion: String(l.descripcion), codigo_barras: String(l.codigo_barras || ''), cantidad: num(l.cantidad),
+      precio_base: num(l.precio_base), iva: num(l.iva), categoria: ok ? l.categoria : 'sin_regla',
+      dudoso: !!l.dudoso || !ok, motivo: String(l.motivo || (ok ? '' : 'no sé en qué categoría va'))
+    };
+  }).filter(l => {
+    const clave = norm(l.descripcion) + '|' + l.precio_base.toFixed(4);
+    return !vistas.has(clave) && vistas.add(clave);
+  });
+  const quitadas = (Array.isArray(d?.lineas) ? d.lineas.filter(l => l && l.descripcion).length : 0) - lineas.length;
+  if (quitadas > 0) avisos.push(`He quitado ${quitadas} ${quitadas === 1 ? 'línea repetida' : 'líneas repetidas'} (mismo producto y mismo precio).`);
+  return { proveedor: String(d?.proveedor || ''), fecha: String(d?.fecha || ''), numero: String(d?.numero || ''), avisos, lineas };
 }
 
 const LECTORES = {
