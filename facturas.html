@@ -540,43 +540,61 @@ async function pdfAImagenes(a) {
   return out;
 }
 
-async function pedirGroq(clave, imagenes, quitarRazonamiento = true) {
-  const corte = new AbortController(), t = setTimeout(() => corte.abort(), 90000);
-  let r;
-  try {
-    r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST', signal: corte.signal,
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + clave },
-      body: JSON.stringify({
-        model: modeloGroq(), temperature: 0, max_completion_tokens: 8192,
-        response_format: { type: 'json_object' },
-        ...(quitarRazonamiento ? { reasoning_effort: 'none' } : {}),   // sin "pensar": mucho más rápido
-        messages: [
-          { role: 'system', content: REGLAS + '\n\n' + FORMATO_JSON },
-          { role: 'user', content: [
-            { type: 'text', text: `Lee ${imagenes.length === 1 ? 'esta página' : 'estas ' + imagenes.length + ' páginas'} de la factura (en orden) y devuelve sus líneas clasificadas en JSON.` },
-            ...imagenes.map(d => ({ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + d } }))
-          ] }
-        ]
-      })
-    });
-  } catch (e) {
-    if (e.name === 'AbortError') throw Object.assign(new Error('Groq ha tardado demasiado'), { status: 504 });
-    throw e;
-  } finally { clearTimeout(t); }
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) {
+// Si Groq rechaza algo de la petición, se repite sin ello: sin quitar el razonamiento, sin modo JSON
+// o con otro modelo que lea fotos. El JSON se saca de la respuesta aunque venga con texto alrededor.
+async function pedirGroq(clave, imagenes) {
+  const op = { modelo: modeloGroq(), razonar: false, modoJson: true }, probados = new Set();
+  for (let intento = 0; intento < 6; intento++) {
+    probados.add(op.modelo);
+    leyendoCon = 'Groq (' + op.modelo + ')';
+    const corte = new AbortController(), t = setTimeout(() => corte.abort(), 90000);
+    let r;
+    try {
+      r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST', signal: corte.signal,
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + clave },
+        body: JSON.stringify({
+          model: op.modelo, temperature: 0, max_completion_tokens: 8192,
+          ...(op.modoJson ? { response_format: { type: 'json_object' } } : {}),
+          ...(op.razonar ? {} : { reasoning_effort: 'none' }),   // sin "pensar": mucho más rápido
+          messages: [
+            { role: 'system', content: REGLAS + '\n\n' + FORMATO_JSON },
+            { role: 'user', content: [
+              { type: 'text', text: `Lee ${imagenes.length === 1 ? 'esta página' : 'estas ' + imagenes.length + ' páginas'} de la factura (en orden) y devuelve sus líneas clasificadas en JSON.` },
+              ...imagenes.map(d => ({ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + d } }))
+            ] }
+          ]
+        })
+      });
+    } catch (e) {
+      if (e.name === 'AbortError') throw Object.assign(new Error('Groq ha tardado demasiado'), { status: 504 });
+      throw e;
+    } finally { clearTimeout(t); }
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) {
+      const ch = j.choices?.[0], txt = ch?.message?.content || '';
+      if (ch?.finish_reason === 'length') throw new Error('La factura es demasiado larga: léela por partes (menos fotos cada vez).');
+      const a = txt.indexOf('{'), b = txt.lastIndexOf('}');
+      if (a < 0 || b < a) throw new Error('Groq no ha devuelto los datos de la factura. Vuelve a intentarlo.');
+      return JSON.parse(txt.slice(a, b + 1));
+    }
     const m = j.error?.message || 'error ' + r.status;
-    if (r.status === 400 && quitarRazonamiento && /reasoning/i.test(m)) return pedirGroq(clave, imagenes, false);
-    throw Object.assign(new Error('Groq: ' + m), { status: r.status, info: j.error });
+    console.warn('Groq', op, r.status, j.error);
+    const err = Object.assign(new Error('Groq: ' + m), { status: r.status, info: j.error });
+    if (r.status === 401 || r.status === 429 || r.status === 413 || r.status >= 500) throw err;
+    if (/reasoning/i.test(m) && !op.razonar) { op.razonar = true; continue; }
+    if (/response_format|json/i.test(m) && op.modoJson) { op.modoJson = false; continue; }
+    if (r.status === 404 || /model|image|vision/i.test(m)) {
+      const otros = ((await listaModelos('groq', clave)) || []).filter(x => !probados.has(x));
+      if (otros.length) { op.modelo = otros[0]; op.razonar = false; op.modoJson = true; continue; }
+    }
+    throw err;
   }
-  const ch = j.choices?.[0];
-  if (ch?.finish_reason === 'length') throw new Error('La factura es demasiado larga: léela por partes (menos fotos cada vez).');
-  return JSON.parse(ch?.message?.content || '');
+  throw new Error('Groq no ha podido leer la factura. Prueba con Google en Ajustes o con Claude.');
 }
 
 async function leerConGroq(clave) {
-  leyendoCon = 'Groq (' + modeloGroq() + ')';
+  leyendoCon = 'Groq';
   const imagenes = [];
   for (const a of archivos) {
     if (a.type === 'application/pdf') { estado('Preparando el PDF…'); imagenes.push(...await pdfAImagenes(a)); }
