@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4f46e5">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Facturas">
+<meta name="robots" content="noindex">
+<title>Facturas y márgenes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+:root{
+  --bg:#f3f4fa; --surface:#ffffff; --surface-2:#f1f3f9; --text:#0f172a; --muted:#64748b; --border:#e3e7f0;
+  --primary:#4f46e5; --primary-ink:#ffffff; --primary-soft:#eef0ff;
+  --success:#059669; --success-soft:#e7f8f1; --danger:#dc2626; --danger-soft:#fdeeee; --warn:#b45309; --warn-soft:#fff6e5;
+  --hero:linear-gradient(125deg,#4338ca 0%,#6d28d9 52%,#c026d3 100%);
+  --shadow:0 1px 2px rgba(15,23,42,.05),0 10px 30px -12px rgba(30,41,90,.18);
+  --radius:20px; color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0a0f1e; --surface:#121a2d; --surface-2:#1a2340; --text:#e6e9f5; --muted:#93a0bb; --border:#232e4b;
+    --primary:#8b8cf8; --primary-ink:#0b1020; --primary-soft:#1f2552;
+    --success:#34d399; --success-soft:#0f2b23; --danger:#f87171; --danger-soft:#2d1619; --warn:#fbbf24; --warn-soft:#2b2210;
+    --hero:linear-gradient(125deg,#312e81 0%,#4c1d95 55%,#86198f 100%);
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px -14px rgba(0,0,0,.6); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0a0f1e; --surface:#121a2d; --surface-2:#1a2340; --text:#e6e9f5; --muted:#93a0bb; --border:#232e4b;
+  --primary:#8b8cf8; --primary-ink:#0b1020; --primary-soft:#1f2552;
+  --success:#34d399; --success-soft:#0f2b23; --danger:#f87171; --danger-soft:#2d1619; --warn:#fbbf24; --warn-soft:#2b2210;
+  --hero:linear-gradient(125deg,#312e81 0%,#4c1d95 55%,#86198f 100%);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px -14px rgba(0,0,0,.6); color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.45;min-height:100vh;padding-bottom:calc(32px + env(safe-area-inset-bottom));-webkit-tap-highlight-color:transparent}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+.ic{width:20px;height:20px;flex-shrink:0}
+.muted{color:var(--muted)} .small{font-size:12.5px}
+h2{font-size:16px;margin:0;font-weight:700;display:flex;align-items:center;gap:8px}
+.hero{background:var(--hero);color:#fff;padding:calc(14px + env(safe-area-inset-top)) 16px 58px;border-radius:0 0 30px 30px}
+.hero-inner{max-width:880px;margin:0 auto;display:flex;align-items:center;gap:12px}
+.logo{width:44px;height:44px;border-radius:15px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.28);display:grid;place-items:center}
+.brand{min-width:0;flex:1}
+.brand h1{font-size:20px;margin:0;font-weight:800;letter-spacing:-.02em}
+.brand p{margin:0;font-size:12.5px;opacity:.88}
+.hbtn{width:44px;height:44px;border-radius:15px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.14);color:#fff;display:grid;place-items:center}
+.layout{max-width:880px;margin:-42px auto 0;padding:0 16px;display:grid;gap:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;min-width:0}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.btn{border:1px solid var(--border);background:var(--surface-2);border-radius:14px;padding:11px 16px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-ink)}
+.btn:disabled{opacity:.55;cursor:default}
+.btn.sm{min-height:36px;padding:6px 12px;font-size:13.5px;border-radius:11px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.drop{border:2px dashed var(--border);border-radius:16px;padding:18px;text-align:center;background:var(--surface-2)}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.thumb{position:relative;width:76px;height:96px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--surface-2);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--muted)}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb button{position:absolute;top:3px;right:3px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(15,23,42,.7);color:#fff;font-size:14px;line-height:1}
+.field{display:grid;gap:4px;flex:1;min-width:140px}
+.field label{font-size:12.5px;color:var(--muted);font-weight:600}
+.field input,.field select{border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:10px 12px;min-height:44px;width:100%}
+.status{border-radius:14px;padding:12px 14px;font-weight:600;font-size:14px}
+.status.info{background:var(--primary-soft);color:var(--primary)}
+.status.error{background:var(--danger-soft);color:var(--danger)}
+.status.ok{background:var(--success-soft);color:var(--success)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-size:12px;color:var(--muted);font-weight:700;text-align:left;padding:6px 4px;border-bottom:1px solid var(--border)}
+td{padding:8px 4px;border-bottom:1px solid var(--border);vertical-align:top}
+td.num,th.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+td.c,th.c{text-align:center}
+.grp td{background:var(--surface-2);font-weight:800;font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.pname{font-weight:600;word-break:break-word}
+.pname small{display:block;color:var(--muted);font-weight:500}
+.cat{margin-top:4px;border:1px solid var(--border);background:var(--surface);border-radius:9px;padding:4px 6px;font-size:12.5px;max-width:100%}
+.base{width:74px;text-align:right;border:1px solid var(--border);background:var(--surface);border-radius:9px;padding:5px 6px;font-weight:700}
+b.final{font-size:15px}
+.warn{color:var(--warn)} .up{color:var(--danger)} .down{color:var(--success)}
+.list{margin:8px 0 0;padding-left:18px} .list li{margin:4px 0}
+.chip{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--warn-soft);color:var(--warn)}
+.link{background:none;border:0;padding:0;color:var(--primary);font-weight:700;font-size:12.5px;text-decoration:underline}
+.overlay{position:fixed;inset:0;background:rgba(10,15,30,.55);display:none;align-items:flex-start;justify-content:center;padding:calc(20px + env(safe-area-inset-top)) 12px;z-index:50}
+.overlay.show{display:flex}
+.sheet{background:var(--surface);border-radius:20px;width:100%;max-width:560px;max-height:calc(100vh - 40px);overflow:auto;padding:16px;box-shadow:var(--shadow)}
+.res{display:block;width:100%;text-align:left;border:1px solid var(--border);background:var(--surface-2);border-radius:12px;padding:10px 12px;margin-top:8px}
+.res b{float:right;margin-left:8px}
+.hist a{color:var(--primary);font-weight:700}
+.hidden{display:none!important}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:12px;font-weight:600;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner">
+    <div class="logo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg></div>
+    <div class="brand"><h1>Facturas y márgenes</h1><p>Lee la factura, calcula el PVP y lo compara con Glop</p></div>
+    <button class="hbtn" id="btn-ajustes" aria-label="Ajustes"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="card">
+    <div class="card-head"><h2>1. Factura</h2><button class="btn sm" id="btn-nueva">Nueva factura</button></div>
+    <div class="drop">
+      <p style="margin:0 0 10px">Haz fotos de la factura (todas las páginas) o elige el PDF.</p>
+      <div class="row" style="justify-content:center">
+        <label class="btn primary"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Hacer foto<input id="in-camara" type="file" accept="image/*" capture="environment" hidden></label>
+        <label class="btn">Elegir fotos o PDF<input id="in-archivos" type="file" accept="image/*,application/pdf" multiple hidden></label>
+      </div>
+      <div class="thumbs" id="thumbs"></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn primary" id="btn-leer" style="flex:1">Leer factura</button>
+    </div>
+    <div id="estado" class="status info hidden" style="margin-top:12px"></div>
+  </section>
+
+  <section class="card hidden" id="card-datos">
+    <div class="card-head"><h2>2. Tarificación</h2><span class="muted small" id="resumen-leido"></span></div>
+    <div class="row">
+      <div class="field"><label for="f-prov">Proveedor</label><input id="f-prov"></div>
+      <div class="field" style="max-width:170px"><label for="f-fecha">Fecha</label><input id="f-fecha" type="date"></div>
+      <div class="field" style="max-width:150px"><label for="f-num">Nº factura</label><input id="f-num"></div>
+    </div>
+    <div id="avisos"></div>
+    <div style="overflow-x:auto;margin-top:12px"><table id="t-tarifa"></table></div>
+    <div id="revisar"></div>
+  </section>
+
+  <section class="card hidden" id="card-comp">
+    <div class="card-head"><h2>3. Comparación con PVP de Glop</h2><span class="muted small" id="pvp-fecha"></span></div>
+    <div style="overflow-x:auto"><table id="t-comp"></table></div>
+    <div id="comp-extra"></div>
+    <p class="small" style="margin:12px 0 0;font-weight:700" id="comp-resumen"></p>
+  </section>
+
+  <section class="card hidden" id="card-guardar">
+    <div class="row">
+      <button class="btn primary" id="btn-drive" style="flex:1">Guardar en Drive</button>
+      <button class="btn" id="btn-pdf">Descargar PDF</button>
+    </div>
+    <p class="small muted" style="margin:10px 0 0">Se guarda en Drive en FACTURAS / proveedor: las fotos o el PDF de la factura y un PDF con los precios calculados.</p>
+  </section>
+
+  <section class="card hist" id="card-hist">
+    <h2>Facturas guardadas</h2>
+    <div id="hist" class="small" style="margin-top:8px"></div>
+  </section>
+</main>
+
+<div class="overlay" id="ov-ajustes">
+  <div class="sheet">
+    <div class="card-head"><h2>Ajustes</h2><button class="btn sm" data-cerrar>Cerrar</button></div>
+    <div class="field"><label for="f-clave">Clave de la API de Claude</label><input id="f-clave" type="password" autocomplete="off" placeholder="sk-ant-..."></div>
+    <p class="small muted">Se guarda solo en este dispositivo. Se crea en console.anthropic.com → API Keys. Cada factura leída cuesta unos céntimos.</p>
+    <div class="row"><button class="btn primary" id="btn-guardar-clave">Guardar clave</button><button class="btn" id="btn-borrar-clave">Borrar clave</button></div>
+    <hr style="border:0;border-top:1px solid var(--border);margin:16px 0">
+    <h2>Google Drive</h2>
+    <p class="small" id="drive-estado"></p>
+    <button class="btn" id="btn-drive-conectar">Conectar con Drive</button>
+  </div>
+</div>
+
+<div class="overlay" id="ov-buscar">
+  <div class="sheet">
+    <div class="card-head"><h2>Elegir artículo de Glop</h2><button class="btn sm" data-cerrar>Cerrar</button></div>
+    <p class="small muted" id="buscar-para"></p>
+    <div class="field"><input id="f-buscar" placeholder="Buscar por nombre o código"></div>
+    <button class="res" id="btn-nuevo-art"><span>No está en Glop (artículo nuevo)</span></button>
+    <div id="buscar-res"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="drive-pedidos.js"></script>
+<script type="module">
+const SDK_URL = 'https://esm.sh/@anthropic-ai/sdk@0.134.0';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = n => (n == null || isNaN(n)) ? '' : n.toFixed(2).replace('.', ',');
+const toast = msg => { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2600); };
+const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+/* ---------- Márgenes (mismas reglas que el Director de Tarificación) ---------- */
+const CATS = [
+  ['Limpieza e higiene', [
+    ['limpieza_marca', 'Marca especial (Dos Rosas, 2R, La Salud, IFA, Eliges)', 65],
+    ['limpieza_21', 'Limpieza/higiene IVA 21%', 60],
+    ['limpieza_10', 'Limpieza/higiene IVA 10%', 45],
+    ['limpieza_4', 'Limpieza/higiene IVA 4%', 35],
+    ['indasec', 'Higiene femenina Indasec/Indasbed', 50],
+    ['compresas', 'Higiene femenina: resto de compresas', 55],
+    ['lacas', 'Lacas', 50]]],
+  ['Bebidas', [
+    ['refrescos_alcohol', 'Refrescos y alcohol', 50],
+    ['aguas_zumos', 'Aguas y zumos', 40],
+    ['cafes', 'Cafés', 35]]],
+  ['Lácteos', [
+    ['leche', 'Leche', 25],
+    ['leche_calcio', 'Leche con calcio', 35],
+    ['reina', 'Reina', 40],
+    ['natas', 'Natas y derivados', 40]]],
+  ['Dulces, básicos y general', [
+    ['disgodul', 'Disgodul', 50],
+    ['navidad', 'Navidad / Irineo / Mazapanes', 40],
+    ['harinas_azucar', 'Harinas / Azúcar', 30],
+    ['arroces', 'Arroces', 40],
+    ['animales', 'Animales (comida, snacks y arena)', 50],
+    ['comestibles', 'Comestibles generales', 40],
+    ['chocolates', 'Chocolates', 40],
+    ['comestibles_ifa', 'Comestibles IFA', 40],
+    ['pizzas', 'Pizzas', 40]]],
+  ['Congelados', [
+    ['congelados_10', 'Congelados IVA 10%', 40],
+    ['congelados_4', 'Congelados IVA 4%', 35],
+    ['gambon', 'Gambón', 35],
+    ['gamba', 'Gamba y langostino', 40],
+    ['helados', 'Helados', 40],
+    ['bloques_helado', 'Bloques de helado', 35],
+    ['croquetas', 'Croquetas', 40]]],
+  ['Carnes y embutidos', [
+    ['carnes', 'Carnes', 50],
+    ['quesos', 'Quesos', 35],
+    ['gran_embutido', 'Gran embutido', 60],
+    ['lacon', 'Lacón', 60],
+    ['jamon_serrano', 'Jamón serrano', 65],
+    ['jamon_iberico', 'Jamón ibérico', 80],
+    ['lomo', 'Lomo cebo y bellota', 40]]],
+  ['Sin regla', [['sin_regla', 'Sin regla: elige el margen', null]]]
+];
+const CAT = {};
+CATS.forEach(([grupo, items]) => items.forEach(([id, nombre, mg]) => { CAT[id] = { id, nombre, mg, grupo }; }));
+const MARGENES = [25, 30, 35, 40, 45, 50, 55, 60, 65, 80];
+
+const REGLAS = `Eres el director de tarificación de un supermercado (La Tienda Nueva, Tembleque). Lees facturas, albaranes o listas de proveedores y clasificas cada producto en su categoría de margen. La app calcula después el precio; tú no calculas precios.
+
+LEER LA FACTURA
+- Transcribe cada línea de producto: descripción tal cual, código de barras si aparece (EAN; si no, cadena vacía), cantidad comprada (0 si no aparece), precio base e IVA (%; 0 si no aparece).
+- Precio base = precio unitario neto de la línea tal como figura (después del descuento de la línea si lo hay). No sumes ni restes IVA. Si la factura da precio por caja y por unidad, usa el de la unidad de venta.
+- No inventes nada. Si un número es ilegible, está cortado o la coma es ambigua (¿1,50 o 15,0?), pon tu mejor lectura, dudoso=true y explica el motivo.
+- Si un mismo producto aparece varias veces al mismo precio, ponlo una sola vez.
+- Ignora portes, envases retornables, recargos, ecotasas y líneas que no son productos.
+- Si la factura indica "Página X de Y" y faltan páginas, añádelo en avisos.
+- Fecha en formato AAAA-MM-DD (cadena vacía si no aparece). Proveedor: nombre comercial corto.
+
+CLASIFICAR (gana la regla más específica, en este orden)
+1. Marca especial de limpieza/higiene (Dos Rosas, 2R., La Salud, IFA, Eliges) → limpieza_marca (65%). Gana siempre en limpieza e higiene, incluida higiene femenina. No en productos para animales.
+2. Producto específico (gambón, gamba, langostino, croquetas, quesos, leche, jamón ibérico, bloques de helado, pizzas…) gana a la categoría general (croquetas congeladas → croquetas).
+3. Categoría general por IVA (limpieza por IVA, congelados por IVA, bebidas por IVA).
+Si sigue habiendo duda real, elige la más probable y marca dudoso=true con el motivo, o usa sin_regla.
+
+Categorías:
+- Limpieza e higiene: limpieza_marca 65%; limpieza_21 (IVA 21%) 60%; limpieza_10 (IVA 10%) 45%; limpieza_4 (IVA 4%) 35%; indasec (Indasec/Indasbed) 50%; compresas (resto de compresas) 55%; lacas 50%.
+- Bebidas (manda el tipo; si no está claro, IVA 21% → refrescos_alcohol, IVA 10% → aguas_zumos): refrescos_alcohol 50%; aguas_zumos 40%; cafes 35%. Bebidas IFA/Eliges siguen la regla de bebidas: vino, gaseosa y refrescos al 50%, zumos y aguas al 40%.
+- Lácteos: leche (líquida: entera, semi, desnatada, sin lactosa, también IFA/Eliges) 25%; leche_calcio ("CALCIO" en el nombre) 35%; reina 40%; natas (natas y derivados) 40%. Leche condensada, en polvo, bebidas vegetales o leche infantil no tienen regla: sin_regla o dudoso.
+- Dulces, básicos y general: disgodul 50%; navidad (Navidad, Irineo, mazapanes, turrones, mantecados, polvorones, dulces navideños) 40%; harinas_azucar 30%; arroces (cualquier arroz) 40%; animales (comida, snacks y arena, también IFA Amigo) 50%; comestibles (comestibles generales) 40%; chocolates 40%; comestibles_ifa 40%; pizzas 40%.
+- Congelados: congelados_10 (IVA 10%) 40%; congelados_4 (IVA 4%) 35%; gambon 35%; gamba (gamba y langostino) 40%; helados 40%; bloques_helado 35%; croquetas 40%. Los preparados congelados con jamón en el nombre (p. ej. Mahesito jamón serrano de Maheso) son congelados, no jamón.
+- Carnes y embutidos: carnes 50%; quesos 35%; gran_embutido 60% (si no estás seguro de que sea gran embutido —paleta ibérica, carne congelada…— marca dudoso); lacon 60%; jamon_serrano 65%; jamon_iberico 80%; lomo (lomo cebo y bellota) 40%.
+
+Decisiones ya confirmadas por el dueño: arroz (SOS y cualquier arroz) → arroces; Mahesitos Maheso → congelados_10; vino blanco Eliges (brik) → refrescos_alcohol; gaseosa IFA-Eliges → refrescos_alcohol; arena de gatos IFA Amigo → animales.
+
+Notas de proveedores:
+- Cafés Mora (Mora, Toledo): la columna "Tipo IVA" usa códigos 1 = 10%, 2 = 21%, 3 = 4%. Suele tener varias páginas.
+- Disycash VII: el precio es por unidad de venta (pack o unidad según el producto); la columna %IVA viene explícita.
+- Congelados El Músico: el IVA no aparece por línea, solo en el resumen de bases (10% y 4%). Deduce qué productos van al 4% cuadrando sus importes con la base al 4% (normalmente verduras como guisantes y espinacas).`;
+
+const SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['proveedor', 'fecha', 'numero', 'lineas', 'avisos'],
+  properties: {
+    proveedor: { type: 'string' },
+    fecha: { type: 'string', description: 'AAAA-MM-DD o vacío' },
+    numero: { type: 'string', description: 'Número de factura o albarán, o vacío' },
+    lineas: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false,
+        required: ['descripcion', 'codigo_barras', 'cantidad', 'precio_base', 'iva', 'categoria', 'dudoso', 'motivo'],
+        properties: {
+          descripcion: { type: 'string' },
+          codigo_barras: { type: 'string' },
+          cantidad: { type: 'number' },
+          precio_base: { type: 'number' },
+          iva: { type: 'number' },
+          categoria: { type: 'string', enum: Object.keys(CAT) },
+          dudoso: { type: 'boolean' },
+          motivo: { type: 'string', description: 'Por qué es dudoso; vacío si no lo es' }
+        }
+      }
+    },
+    avisos: { type: 'array', items: { type: 'string' } }
+  }
+};
+
+/* Precio final = base + base × margen / 100, redondeado a 2 decimales (0,005 sube). Cálculo en enteros. */
+function precioFinal(base, mg) {
+  if (base == null || isNaN(base) || mg == null) return null;
+  const b4 = Math.round(base * 10000);
+  return Math.floor((b4 * (100 + mg) + 5000) / 10000) / 100;
+}
+
+/* ---------- Estado ---------- */
+let archivos = [];                       // {name, type, data(base64), preview}
+let F = lsGet('facturaActual', null);    // factura leída y editada
+const S = { pvp: null, pvpFecha: '' };
+
+/* ---------- PVP de Glop (pvp.json, lo genera el PC de la tienda cada hora) ---------- */
+const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
+  .replace(/(\d),(\d)/g, '$1.$2').replace(/[^A-Z0-9.]+/g, ' ').trim();
+const UNIDADES = { KG: ['G', 1000], KGS: ['G', 1000], K: ['G', 1000], GR: ['G', 1], GRS: ['G', 1], G: ['G', 1], L: ['ML', 1000], LT: ['ML', 1000], LTS: ['ML', 1000], LITRO: ['ML', 1000], LITROS: ['ML', 1000], CL: ['ML', 10], ML: ['ML', 1] };
+function tamano(n) {
+  const m = n.match(/(\d+(?:\.\d+)?)\s*(KGS?|K|GRS?|G|LTS?|LITROS?|L|CL|ML)\b/);
+  if (!m) return '';
+  const [u, f] = UNIDADES[m[2]];
+  return u + Math.round(parseFloat(m[1]) * f);
+}
+const VACIAS = new Set(['DE', 'LA', 'EL', 'LOS', 'LAS', 'EN', 'CON', 'SIN', 'Y', 'X', 'AL', 'DEL', 'UD', 'UDS', 'U', 'PACK', 'CAJA']);
+const tokens = n => n.replace(/(\d+(?:\.\d+)?)\s*(KGS?|K|GRS?|G|LTS?|LITROS?|L|CL|ML)\b/g, ' ').split(/[\s.]+/).filter(t => t.length > 1 && !VACIAS.has(t) && !/^\d+$/.test(t));
+
+async function cargarPvp() {
+  try {
+    const r = await fetch('./pvp.json', { cache: 'no-cache' });
+    if (!r.ok) throw new Error(r.status);
+    const lm = r.headers.get('last-modified');
+    const filas = await r.json();
+    S.pvp = filas.map(([d, cb, cb2, pvp, iva, fam]) => {
+      const n = norm(d);
+      return { d, cb, cb2, pvp, iva, fam, n, t: tokens(n), tam: tamano(n) };
+    });
+    S.porCodigo = new Map();
+    S.pvp.forEach(a => { if (a.cb) S.porCodigo.set(a.cb.replace(/^0+/, ''), a); if (a.cb2) S.porCodigo.set(a.cb2.replace(/^0+/, ''), a); });
+    S.pvpFecha = lm ? new Date(lm).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  } catch (e) {
+    S.pvp = null;
+  }
+}
+
+function puntuar(q, a) {
+  if (!q.t.length) return 0;
+  let ok = 0;
+  for (const t of q.t) {
+    if (a.t.includes(t)) ok += 1;
+    else if (t.length >= 3 && a.t.some(x => x.length >= 3 && (x.startsWith(t) || t.startsWith(x)))) ok += 0.7;
+  }
+  let s = ok / q.t.length;
+  if (q.tam && a.tam && q.tam !== a.tam) s *= 0.3;
+  return s;
+}
+function candidatos(texto, max = 20) {
+  const n = norm(texto), q = { t: tokens(n), tam: tamano(n) };
+  return S.pvp.map(a => ({ a, s: puntuar(q, a) })).filter(x => x.s > 0).sort((x, y) => y.s - x.s).slice(0, max);
+}
+/* Cruce: primero por código de barras, luego por nombre (marca, tipo y tamaño). */
+function cruzar(l) {
+  if (!S.pvp) return { estado: 'sin_lista' };
+  const cb = (l.codigo_barras || '').replace(/\D/g, '').replace(/^0+/, '');
+  if (cb.length >= 6 && S.porCodigo.has(cb)) return { estado: 'ok', art: S.porCodigo.get(cb), por: 'código' };
+  const c = candidatos(l.descripcion, 2);
+  if (!c.length || c[0].s < 0.4) return { estado: 'nuevo' };
+  const exacto = c[0].a.n === norm(l.descripcion) || (c[0].s >= 0.999 && (!c[1] || c[1].s < 0.999));
+  const claro = exacto || (c[0].s >= 0.75 && (!c[1] || c[1].s <= c[0].s - 0.15));
+  return { estado: claro ? 'ok' : 'duda', art: c[0].a, por: 'nombre' };
+}
+
+/* ---------- Archivos ---------- */
+const b64 = buf => { let s = ''; const b = new Uint8Array(buf); for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); };
+async function prepararImagen(file) {
+  const bmp = await createImageBitmap(file);
+  const max = 2000, k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+  return { name: file.name.replace(/\.[^.]+$/, '') + '.jpg', type: 'image/jpeg', blob, data: b64(await blob.arrayBuffer()), preview: URL.createObjectURL(blob) };
+}
+async function anadirArchivos(lista) {
+  for (const f of lista) {
+    try {
+      if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) {
+        if (f.size > 30e6) { toast('El PDF es demasiado grande (máx. 30 MB)'); continue; }
+        archivos.push({ name: f.name, type: 'application/pdf', blob: f, data: b64(await f.arrayBuffer()) });
+      } else {
+        archivos.push(await prepararImagen(f));
+      }
+    } catch (e) {
+      toast('No se pudo abrir ' + f.name + ' (¿formato HEIC?). Prueba a hacer la foto desde aquí.');
+    }
+  }
+  pintarMiniaturas();
+}
+function pintarMiniaturas() {
+  $('#thumbs').innerHTML = archivos.map((a, i) => `<div class="thumb">${a.preview ? `<img src="${a.preview}" alt="">` : 'PDF'}<button data-quitar="${i}" aria-label="Quitar">×</button></div>`).join('');
+}
+$('#in-camara').addEventListener('change', e => { anadirArchivos([...e.target.files]); e.target.value = ''; });
+$('#in-archivos').addEventListener('change', e => { anadirArchivos([...e.target.files]); e.target.value = ''; });
+$('#thumbs').addEventListener('click', e => { const b = e.target.closest('[data-quitar]'); if (b) { archivos.splice(+b.dataset.quitar, 1); pintarMiniaturas(); } });
+
+/* ---------- Leer con Claude ---------- */
+const estado = (msg, tipo = 'info') => { const e = $('#estado'); if (!msg) return e.classList.add('hidden'); e.className = 'status ' + tipo; e.textContent = msg; };
+
+async function leerFactura() {
+  const clave = lsGet('claveClaude', '');
+  if (!clave) { abrir('#ov-ajustes'); toast('Primero pon la clave de la API de Claude'); return; }
+  if (!archivos.length) { toast('Añade primero las fotos o el PDF de la factura'); return; }
+  const btn = $('#btn-leer'); btn.disabled = true;
+  estado('Leyendo la factura… puede tardar un minuto.');
+  try {
+    const { default: Anthropic } = await import(SDK_URL);
+    const client = new Anthropic({ apiKey: clave, dangerouslyAllowBrowser: true });
+    const contenido = archivos.map(a => a.type === 'application/pdf'
+      ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: a.data } }
+      : { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: a.data } });
+    contenido.push({ type: 'text', text: `Lee esta factura (${archivos.length} ${archivos.length === 1 ? 'archivo' : 'archivos'}, en orden) y devuelve sus líneas clasificadas.` });
+    const peticion = {
+      model: 'claude-opus-5-5',
+      max_tokens: 16000,
+      system: REGLAS,
+      output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
+      messages: [{ role: 'user', content: contenido }]
+    };
+    let r;
+    try {
+      // Si Claude rechaza la petición, la API la repite con otro modelo (fallbacks).
+      r = await client.beta.messages.create({ ...peticion, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });
+    } catch (e) {
+      if (e?.status !== 400) throw e;   // si la cuenta no admite fallbacks, se repite sin ellos
+      r = await client.messages.create(peticion);
+    }
+    if (r.stop_reason === 'refusal') throw new Error('Claude no ha podido leer este documento.');
+    if (r.stop_reason === 'max_tokens') throw new Error('La factura es demasiado larga: léela por partes (menos fotos cada vez).');
+    const texto = r.content.find(b => b.type === 'text')?.text;
+    const datos = JSON.parse(texto);
+    F = {
+      proveedor: datos.proveedor, fecha: datos.fecha, numero: datos.numero, avisos: datos.avisos,
+      lineas: datos.lineas.map((l, i) => ({ ...l, id: i, mg: CAT[l.categoria]?.mg ?? null, cruce: null }))
+    };
+    F.lineas.forEach(l => { l.cruce = cruzar(l); });
+    lsSet('facturaActual', F);
+    const dudas = F.lineas.filter(l => l.dudoso || l.mg == null).length;
+    estado(`He leído ${F.lineas.length} productos${dudas ? `, ${dudas} para revisar` : ''}.`, 'ok');
+    pintar();
+    $('#card-datos').scrollIntoView({ behavior: 'smooth' });
+  } catch (e) {
+    const s = e?.status;
+    estado(s === 401 ? 'La clave de la API no es válida. Revísala en Ajustes.'
+      : s === 429 ? 'Demasiadas peticiones o sin saldo en la cuenta de Claude. Espera un poco o revisa el saldo.'
+      : s >= 500 ? 'Claude no responde ahora mismo. Vuelve a intentarlo en un momento.'
+      : 'No se pudo leer: ' + (e?.message || e), 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+$('#btn-leer').addEventListener('click', leerFactura);
+
+/* ---------- Pintar resultados ---------- */
+function opcionesCat(sel) {
+  return CATS.map(([g, items]) => `<optgroup label="${esc(g)}">${items.map(([id, n, mg]) => `<option value="${id}"${id === sel ? ' selected' : ''}>${mg == null ? '—' : mg + '%'} · ${esc(n)}</option>`).join('')}</optgroup>`).join('');
+}
+function pintar() {
+  if (!F) { ['#card-datos', '#card-comp', '#card-guardar'].forEach(s => $(s).classList.add('hidden')); return; }
+  ['#card-datos', '#card-comp', '#card-guardar'].forEach(s => $(s).classList.remove('hidden'));
+  $('#f-prov').value = F.proveedor || ''; $('#f-fecha').value = /^\d{4}-\d{2}-\d{2}$/.test(F.fecha || '') ? F.fecha : ''; $('#f-num').value = F.numero || '';
+  $('#resumen-leido').textContent = `${F.lineas.length} productos`;
+  $('#avisos').innerHTML = (F.avisos || []).length ? `<ul class="list warn small">${F.avisos.map(a => `<li>⚠️ ${esc(a)}</li>`).join('')}</ul>` : '';
+
+  // Tabla de tarificación agrupada por categoría
+  let h = '<thead><tr><th>Producto</th><th class="c">% MG</th><th class="num">Base (€)</th><th class="num">FINAL (€)</th></tr></thead><tbody>';
+  for (const [g] of CATS) {
+    const ls = F.lineas.filter(l => (CAT[l.categoria]?.grupo || 'Sin regla') === g);
+    if (!ls.length) continue;
+    h += `<tr class="grp"><td colspan="4">${esc(g)}</td></tr>`;
+    for (const l of ls) {
+      const fin = precioFinal(l.precio_base, l.mg);
+      h += `<tr data-id="${l.id}">
+        <td><div class="pname">${l.dudoso || l.mg == null ? '⚠️ ' : ''}${esc(l.descripcion)}${l.cantidad ? `<small>Cant. ${String(l.cantidad).replace('.', ',')}${l.iva ? ' · IVA ' + l.iva + '%' : ''}</small>` : l.iva ? `<small>IVA ${l.iva}%</small>` : ''}</div>
+          <select class="cat" data-cat>${opcionesCat(l.categoria)}</select></td>
+        <td class="c"><select class="cat" data-mg style="margin:0">${[...new Set([...MARGENES, l.mg].filter(x => x != null))].sort((a, b) => a - b).map(m => `<option${m === l.mg ? ' selected' : ''}>${m}</option>`).join('')}${l.mg == null ? '<option selected value="">—</option>' : ''}</select></td>
+        <td class="num"><input class="base" data-base inputmode="decimal" value="${fmt(l.precio_base)}"></td>
+        <td class="num"><b class="final">${fin == null ? '—' : fmt(fin)}</b></td></tr>`;
+    }
+  }
+  $('#t-tarifa').innerHTML = h + '</tbody>';
+
+  const rev = F.lineas.filter(l => l.dudoso || l.mg == null);
+  $('#revisar').innerHTML = rev.length ? `<h2 style="margin-top:16px">Para revisar</h2><ul class="list small">${rev.map(l => {
+    const ops = l.mg == null ? [40, 50, 60].map(m => `${m}% → ${fmt(precioFinal(l.precio_base, m))} €`).join(' · ') : '';
+    return `<li><b>${esc(l.descripcion)}</b>: ${esc(l.motivo || (l.mg == null ? 'no encaja en ninguna regla' : 'dato dudoso'))}${ops ? `<br><span class="muted">${ops}</span>` : ''}</li>`;
+  }).join('')}</ul>` : '';
+  pintarComparacion();
+}
+
+function pintarComparacion() {
+  $('#pvp-fecha').textContent = S.pvp ? (S.pvpFecha ? 'Lista de Glop del ' + S.pvpFecha : 'Lista de Glop') : '';
+  if (!S.pvp) {
+    $('#t-comp').innerHTML = ''; $('#comp-extra').innerHTML = '<p class="small warn">No se pudo cargar la lista de precios de Glop (pvp.json). Se entrega la tarificación sin comparar.</p>'; $('#comp-resumen').textContent = '';
+    return;
+  }
+  const filas = [], nuevos = [], sinPvp = [], dudas = [];
+  for (const l of F.lineas) {
+    const calc = precioFinal(l.precio_base, l.mg), c = l.cruce || {};
+    if (c.estado === 'nuevo' || !c.art) { nuevos.push(l); continue; }
+    if (c.estado === 'duda') dudas.push(l);
+    if (!c.art.pvp) { sinPvp.push(l); continue; }
+    const dif = calc == null ? null : Math.round((calc - c.art.pvp) * 100) / 100;
+    filas.push({ l, calc, pvp: c.art.pvp, dif });
+  }
+  const orden = x => x.dif == null ? 3 : x.dif > 0 ? 0 : x.dif < 0 ? 1 : 2;
+  filas.sort((a, b) => orden(a) - orden(b) || Math.abs(b.dif || 0) - Math.abs(a.dif || 0));
+  $('#t-comp').innerHTML = '<thead><tr><th>Producto</th><th class="num">Calc.</th><th class="num">Glop</th><th class="num">Dif.</th></tr></thead><tbody>' +
+    filas.map(({ l, calc, pvp, dif }) => `<tr data-id="${l.id}"><td><div class="pname">${l.cruce.estado === 'duda' ? '⚠️ ' : ''}${esc(l.descripcion)}<small>${esc(l.cruce.art.d)} <button class="link" data-cambiar>cambiar</button></small></div></td>
+      <td class="num"><b>${calc == null ? '—' : fmt(calc)}</b></td><td class="num"><b>${fmt(pvp)}</b></td>
+      <td class="num ${dif > 0 ? 'up' : dif < 0 ? 'down' : ''}">${dif == null ? '—' : (dif > 0 ? '+' : '') + fmt(dif) + (dif > 0 ? ' ⬆️' : dif < 0 ? ' ⬇️' : ' =')}</td></tr>`).join('') + '</tbody>';
+  const item = l => `<li data-id="${l.id}">${esc(l.descripcion)}${l.cruce?.art ? ` → <span class="muted">${esc(l.cruce.art.d)}</span>` : ''} <button class="link" data-cambiar>${l.cruce?.estado === 'nuevo' ? 'buscar en Glop' : 'cambiar'}</button></li>`;
+  $('#comp-extra').innerHTML =
+    (dudas.length ? `<p class="small" style="margin:12px 0 0"><span class="chip">⚠️ Revisa el cruce</span> No estoy seguro de que sean el mismo artículo:</p><ul class="list small">${dudas.map(item).join('')}</ul>` : '') +
+    (nuevos.length ? `<p class="small" style="margin:12px 0 0"><b>Nuevos</b> (no están en Glop):</p><ul class="list small">${nuevos.map(item).join('')}</ul>` : '') +
+    (sinPvp.length ? `<p class="small" style="margin:12px 0 0"><b>Sin PVP</b> en Glop:</p><ul class="list small">${sinPvp.map(item).join('')}</ul>` : '');
+  const n = k => filas.filter(x => orden(x) === k).length;
+  $('#comp-resumen').textContent = `${n(0)} por debajo del margen, ${n(1)} por encima, ${n(2)} iguales, ${nuevos.length} nuevos`;
+}
+
+/* Edición en la tabla */
+const linea = el => F.lineas.find(l => l.id === +el.closest('[data-id]').dataset.id);
+function guardarYPintar() { lsSet('facturaActual', F); pintar(); }
+$('#t-tarifa').addEventListener('change', e => {
+  const l = linea(e.target);
+  if (e.target.matches('[data-cat]')) { l.categoria = e.target.value; l.mg = CAT[l.categoria].mg; if (l.mg != null) l.dudoso = false; }
+  else if (e.target.matches('[data-mg]')) { l.mg = e.target.value === '' ? null : +e.target.value; if (l.mg != null) l.dudoso = false; }
+  else if (e.target.matches('[data-base]')) {
+    const t = e.target.value.trim(), v = parseFloat(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
+    if (isNaN(v)) { toast('Precio no válido'); } else { l.precio_base = v; l.dudoso = false; }
+  }
+  guardarYPintar();
+});
+['#f-prov', '#f-fecha', '#f-num'].forEach((s, i) => $(s).addEventListener('change', e => { F[['proveedor', 'fecha', 'numero'][i]] = e.target.value; lsSet('facturaActual', F); }));
+
+/* Buscar otro artículo de Glop para una línea */
+let lineaBuscar = null;
+function buscar(q) {
+  const res = q.trim() ? (/^\d{5,}$/.test(q.trim()) ? S.pvp.filter(a => a.cb.includes(q.trim()) || a.cb2.includes(q.trim())).slice(0, 20).map(a => ({ a })) : candidatos(q)) : [];
+  $('#buscar-res').innerHTML = res.map(({ a }, i) => `<button class="res" data-i="${i}"><b>${fmt(a.pvp)} €</b>${esc(a.d)}<br><span class="small muted">${esc(a.cb)}${a.fam ? ' · ' + esc(a.fam) : ''}</span></button>`).join('') || (q.trim() ? '<p class="small muted">Sin resultados</p>' : '');
+  buscar.res = res;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-cambiar]');
+  if (!b || !S.pvp) return;
+  lineaBuscar = linea(b);
+  $('#buscar-para').textContent = 'Para: ' + lineaBuscar.descripcion;
+  $('#f-buscar').value = lineaBuscar.descripcion; buscar(lineaBuscar.descripcion);
+  abrir('#ov-buscar'); setTimeout(() => $('#f-buscar').select(), 50);
+});
+$('#f-buscar').addEventListener('input', e => buscar(e.target.value));
+$('#buscar-res').addEventListener('click', e => {
+  const b = e.target.closest('[data-i]'); if (!b) return;
+  lineaBuscar.cruce = { estado: 'ok', art: buscar.res[+b.dataset.i].a, por: 'manual' };
+  cerrar(); guardarYPintar();
+});
+$('#btn-nuevo-art').addEventListener('click', () => { lineaBuscar.cruce = { estado: 'nuevo' }; cerrar(); guardarYPintar(); });
+
+/* ---------- PDF con el cálculo ---------- */
+const nombreBase = () => [F.fecha || new Date().toISOString().slice(0, 10), F.proveedor || 'Proveedor', F.numero].filter(Boolean).join(' ').replace(/[\\/:*?"<>|]+/g, '-').trim();
+function construirPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  doc.setFontSize(15); doc.text(`${F.proveedor || 'Factura'}`, 14, 16);
+  doc.setFontSize(10); doc.text([F.fecha && 'Fecha: ' + F.fecha.split('-').reverse().join('/'), F.numero && 'Nº ' + F.numero].filter(Boolean).join('   ·   '), 14, 22);
+  const tarifa = F.lineas.map(l => [(l.dudoso || l.mg == null ? '(!) ' : '') + l.descripcion, l.mg == null ? '—' : l.mg + '%', fmt(l.precio_base), fmt(precioFinal(l.precio_base, l.mg)) || '—']);
+  doc.autoTable({ startY: 27, head: [['Producto', '% MG', 'Base (€)', 'FINAL (€)']], body: tarifa, styles: { fontSize: 9 }, columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } }, headStyles: { fillColor: [79, 70, 229] } });
+  if (S.pvp) {
+    const comp = F.lineas.filter(l => l.cruce?.art?.pvp).map(l => {
+      const c = precioFinal(l.precio_base, l.mg), d = c == null ? null : Math.round((c - l.cruce.art.pvp) * 100) / 100;
+      return [l.descripcion, c == null ? '—' : fmt(c), fmt(l.cruce.art.pvp), d == null ? '—' : (d > 0 ? '+' : '') + fmt(d) + (d > 0 ? ' subir' : d < 0 ? ' bajar' : ' =')];
+    });
+    doc.setFontSize(12); doc.text('Comparación con PVP de Glop' + (S.pvpFecha ? ' (' + S.pvpFecha + ')' : ''), 14, doc.lastAutoTable.finalY + 10);
+    doc.autoTable({ startY: doc.lastAutoTable.finalY + 13, head: [['Producto', 'Calc.', 'Glop', 'Dif.']], body: comp, styles: { fontSize: 9 }, columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } }, headStyles: { fillColor: [79, 70, 229] } });
+    const nuevos = F.lineas.filter(l => !l.cruce?.art).map(l => l.descripcion);
+    if (nuevos.length) doc.setFontSize(10), doc.text(doc.splitTextToSize('Nuevos (no están en Glop): ' + nuevos.join(', '), 180), 14, doc.lastAutoTable.finalY + 8);
+  }
+  return doc;
+}
+$('#btn-pdf').addEventListener('click', () => {
+  if (!window.jspdf) return toast('Cargando… vuelve a pulsar en un momento');
+  construirPDF().save(nombreBase() + ' - márgenes.pdf');
+});
+
+/* ---------- Guardar en Drive: FACTURAS / proveedor ---------- */
+async function dfetch(token, url, opts = {}) {
+  const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + token } });
+  if (!r.ok) { let m = ''; try { m = (await r.json()).error?.message || ''; } catch {} throw new Error(`Drive respondió ${r.status}${m ? ': ' + m : ''}`); }
+  return r.json();
+}
+async function carpeta(token, nombre, padre) {
+  const q = encodeURIComponent(`name='${nombre.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false and '${padre}' in parents`);
+  const f = await dfetch(token, `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&spaces=drive`);
+  if (f.files?.[0]) return f.files[0].id;
+  return (await dfetch(token, 'https://www.googleapis.com/drive/v3/files?fields=id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: nombre, mimeType: 'application/vnd.google-apps.folder', parents: [padre] }) })).id;
+}
+async function subir(token, padre, nombre, blob, mime) {
+  const fd = new FormData();
+  fd.append('metadata', new Blob([JSON.stringify({ name: nombre, parents: [padre], mimeType: mime })], { type: 'application/json' }));
+  fd.append('file', blob);
+  return dfetch(token, 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { method: 'POST', body: fd });
+}
+$('#btn-drive').addEventListener('click', async () => {
+  if (!window.DrivePedidos?.status().configured) return toast('Drive no está disponible');
+  if (!window.jspdf) return toast('Cargando… vuelve a pulsar en un momento');
+  const btn = $('#btn-drive'); btn.disabled = true;
+  try {
+    const token = await DrivePedidos.ensure(true);   // abre la ventana de Google si hace falta (dentro del clic)
+    btn.textContent = 'Guardando…';
+    const raiz = await carpeta(token, 'FACTURAS', 'root');
+    const prov = await carpeta(token, (F.proveedor || 'Sin proveedor').replace(/[\\/]+/g, '-').trim(), raiz);
+    const base = nombreBase();
+    for (const [i, a] of archivos.entries()) {
+      const ext = a.type === 'application/pdf' ? 'pdf' : 'jpg';
+      await subir(token, prov, `${base}${archivos.length > 1 ? ' - ' + (i + 1) : ''}.${ext}`, a.blob, a.type);
+    }
+    await subir(token, prov, base + ' - márgenes.pdf', construirPDF().output('blob'), 'application/pdf');
+    const hist = lsGet('facturasGuardadas', []);
+    hist.unshift({ proveedor: F.proveedor, fecha: F.fecha, numero: F.numero, lineas: F.lineas.length, originales: archivos.length, carpeta: prov, guardada: Date.now() });
+    lsSet('facturasGuardadas', hist.slice(0, 50));
+    pintarHistorial();
+    toast(archivos.length ? 'Factura guardada en Drive' : 'Cálculo guardado en Drive (la factura original ya no estaba cargada)');
+  } catch (e) {
+    toast('No se pudo guardar: ' + (e?.message || e));
+  } finally {
+    btn.disabled = false; btn.textContent = 'Guardar en Drive';
+  }
+});
+function pintarHistorial() {
+  const h = lsGet('facturasGuardadas', []);
+  $('#hist').innerHTML = h.length ? h.map(x => `<div style="padding:6px 0;border-bottom:1px solid var(--border)"><b>${esc(x.proveedor || 'Sin proveedor')}</b> · ${esc((x.fecha || '').split('-').reverse().join('/'))}${x.numero ? ' · Nº ' + esc(x.numero) : ''} · ${x.lineas} productos · <a href="https://drive.google.com/drive/folders/${encodeURIComponent(x.carpeta)}" target="_blank" rel="noopener">Abrir en Drive</a></div>`).join('')
+    : '<span class="muted">Todavía no has guardado ninguna factura desde este dispositivo.</span>';
+}
+
+/* ---------- Ajustes ---------- */
+function abrir(s) { $(s).classList.add('show'); if (s === '#ov-ajustes') pintarAjustes(); }
+function cerrar() { document.querySelectorAll('.overlay').forEach(o => o.classList.remove('show')); }
+document.querySelectorAll('[data-cerrar]').forEach(b => b.addEventListener('click', cerrar));
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) cerrar(); }));
+$('#btn-ajustes').addEventListener('click', () => abrir('#ov-ajustes'));
+function pintarAjustes() {
+  const c = lsGet('claveClaude', '');
+  $('#f-clave').value = ''; $('#f-clave').placeholder = c ? 'Clave guardada (…' + c.slice(-4) + ')' : 'sk-ant-...';
+  const st = window.DrivePedidos?.status();
+  $('#drive-estado').textContent = !st?.configured ? 'Drive no está disponible.' : st.connected ? `Se guarda en la cuenta ${st.account}${st.active ? ' (conectado)' : ''}.` : 'Desconectado en este dispositivo.';
+}
+$('#btn-guardar-clave').addEventListener('click', () => {
+  const v = $('#f-clave').value.trim();
+  if (!v.startsWith('sk-ant-')) return toast('La clave empieza por sk-ant-');
+  lsSet('claveClaude', v); pintarAjustes(); toast('Clave guardada en este dispositivo');
+});
+$('#btn-borrar-clave').addEventListener('click', () => { try { localStorage.removeItem('claveClaude'); } catch {} pintarAjustes(); toast('Clave borrada'); });
+$('#btn-drive-conectar').addEventListener('click', () => DrivePedidos.connect().then(() => { pintarAjustes(); toast('Drive conectado'); }, e => toast(e.message)));
+
+$('#btn-nueva').addEventListener('click', () => {
+  if (F && !confirm('¿Empezar una factura nueva? Se borra la que está en pantalla (lo guardado en Drive no se toca).')) return;
+  archivos = []; F = null; lsSet('facturaActual', null); pintarMiniaturas(); estado(''); pintar();
+});
+
+/* ---------- Inicio ---------- */
+pintarHistorial();
+pintar();
+cargarPvp().then(() => { if (F) { F.lineas.forEach(l => { if (!l.cruce || l.cruce.estado === 'sin_lista') l.cruce = cruzar(l); }); pintar(); } });
+</script>
+</body>
+</html>
