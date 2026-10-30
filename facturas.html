@@ -124,6 +124,13 @@ b.final{font-size:15px}
       <button class="btn primary" id="btn-leer" style="flex:1">Leer factura</button>
     </div>
     <div id="estado" class="status info hidden" style="margin-top:12px"></div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+      <p class="small muted" style="margin:0 0 8px">O hazlo con Claude (gratis con tu suscripción): copia las instrucciones, pégalas en Claude junto con la foto y luego pega aquí su respuesta.</p>
+      <div class="row">
+        <button class="btn sm" id="btn-claude-copiar">1. Copiar instrucciones y abrir Claude</button>
+        <button class="btn sm" id="btn-claude-pegar">2. Pegar respuesta de Claude</button>
+      </div>
+    </div>
   </section>
 
   <section class="card hidden" id="card-datos">
@@ -164,6 +171,8 @@ b.final{font-size:15px}
     <div class="card-head"><h2>Ajustes</h2><button class="btn sm" data-cerrar>Cerrar</button></div>
     <div class="field"><label for="f-lector">Quién lee las facturas</label>
       <select id="f-lector"><option value="groq">Groq (gratis, rápido)</option><option value="gemini">Google Gemini (gratis)</option></select></div>
+    <div class="field" style="margin-top:10px"><label for="f-modelo">Modelo</label><select id="f-modelo"></select></div>
+    <p class="small muted" id="t-modelo" style="margin:6px 0 0"></p>
     <div class="field" style="margin-top:10px"><label for="f-clave" id="l-clave">Clave gratuita</label><input id="f-clave" type="password" autocomplete="off"></div>
     <p class="small muted" id="t-clave"></p>
     <div class="row"><button class="btn primary" id="btn-guardar-clave">Guardar clave</button><button class="btn" id="btn-borrar-clave">Borrar clave</button></div>
@@ -181,6 +190,15 @@ b.final{font-size:15px}
     <div class="field"><input id="f-buscar" placeholder="Buscar por nombre o código"></div>
     <button class="res" id="btn-nuevo-art"><span>No está en Glop (artículo nuevo)</span></button>
     <div id="buscar-res"></div>
+  </div>
+</div>
+
+<div class="overlay" id="ov-pegar">
+  <div class="sheet">
+    <div class="card-head"><h2>Respuesta de Claude</h2><button class="btn sm" data-cerrar>Cerrar</button></div>
+    <p class="small muted" style="margin-top:0">Pega aquí todo lo que te ha contestado Claude (el bloque con el JSON).</p>
+    <textarea id="f-pegar" rows="10" style="width:100%;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:12px;padding:10px;font:13px/1.4 ui-monospace,Consolas,monospace"></textarea>
+    <div class="row" style="margin-top:10px"><button class="btn primary" id="btn-pegar-usar" style="flex:1">Usar esta respuesta</button></div>
   </div>
 </div>
 
@@ -448,7 +466,9 @@ async function pedirGemini(clave, cuerpo) {
   const simple = { ...cuerpo, generationConfig: { responseMimeType: 'application/json', maxOutputTokens: cuerpo.generationConfig.maxOutputTokens },
     contents: [{ role: 'user', parts: [...cuerpo.contents[0].parts, { text: 'Responde solo con un JSON que siga exactamente este esquema: ' + JSON.stringify(cuerpo.generationConfig.responseSchema) }] }] };
   let ultimo;
-  const modelos = await modelosGemini(clave);
+  const elegido = lsGet('modelo_gemini', 'auto'), auto = await modelosGemini(clave);
+  // El elegido en Ajustes va primero; si falla o tarda, siguen los automáticos
+  const modelos = elegido === 'auto' ? auto : [elegido, ...auto.filter(m => m !== elegido)];
   for (const modelo of modelos) {
     for (const c of [cuerpo, simple]) {
       leyendoCon = modelo;
@@ -491,7 +511,8 @@ async function leerConGemini(clave) {
 }
 
 /* ---------- Leer con Groq (gratis, modelo con visión; solo imágenes, máx. 3 por petición) ---------- */
-const GROQ_MODELO = 'qwen/qwen3.8-27b';
+const GROQ_MODELO = 'qwen/qwen3.8-27b';   // el recomendado: lee fotos, rápido
+const modeloGroq = () => { const m = lsGet('modelo_groq', 'auto'); return m === 'auto' ? GROQ_MODELO : m; };
 const FORMATO_JSON = `FORMATO DE RESPUESTA
 Responde solo con un objeto JSON, sin texto alrededor, con esta forma:
 {"proveedor": "", "fecha": "AAAA-MM-DD o vacío", "numero": "", "avisos": ["..."],
@@ -527,7 +548,7 @@ async function pedirGroq(clave, imagenes, quitarRazonamiento = true) {
       method: 'POST', signal: corte.signal,
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + clave },
       body: JSON.stringify({
-        model: GROQ_MODELO, temperature: 0, max_completion_tokens: 8192,
+        model: modeloGroq(), temperature: 0, max_completion_tokens: 8192,
         response_format: { type: 'json_object' },
         ...(quitarRazonamiento ? { reasoning_effort: 'none' } : {}),   // sin "pensar": mucho más rápido
         messages: [
@@ -555,7 +576,7 @@ async function pedirGroq(clave, imagenes, quitarRazonamiento = true) {
 }
 
 async function leerConGroq(clave) {
-  leyendoCon = 'Groq';
+  leyendoCon = 'Groq (' + modeloGroq() + ')';
   const imagenes = [];
   for (const a of archivos) {
     if (a.type === 'application/pdf') { estado('Preparando el PDF…'); imagenes.push(...await pdfAImagenes(a)); }
@@ -613,18 +634,9 @@ async function leerFactura() {
   const reloj = setInterval(() => estado(`Leyendo la factura${leyendoCon ? ' con ' + leyendoCon.replace('gemini-', 'Gemini ') : ''}… ${Math.round((Date.now() - inicio) / 1000)} s`), 1000);
   estado('Leyendo la factura…');
   try {
-    const datos = normalizar(lector === 'groq' ? await leerConGroq(clave) : await leerConGemini(clave));
-    F = {
-      proveedor: datos.proveedor, fecha: datos.fecha, numero: datos.numero, avisos: datos.avisos,
-      lineas: datos.lineas.map((l, i) => ({ ...l, id: i, mg: CAT[l.categoria]?.mg ?? null, cruce: null }))
-    };
-    F.lineas.forEach(l => { l.cruce = cruzar(l); });
-    lsSet('facturaActual', F);
+    const datos = lector === 'groq' ? await leerConGroq(clave) : await leerConGemini(clave);
     clearInterval(reloj);
-    const dudas = F.lineas.filter(l => l.dudoso || l.mg == null).length;
-    estado(`He leído ${F.lineas.length} productos${dudas ? `, ${dudas} para revisar` : ''}.`, 'ok');
-    pintar();
-    $('#card-datos').scrollIntoView({ behavior: 'smooth' });
+    usarDatos(datos, `He leído en ${Math.round((Date.now() - inicio) / 1000)} s`);
   } catch (e) {
     clearInterval(reloj);
     const s = e?.status, m = e?.message || String(e), n = L.nombre;
@@ -642,6 +654,51 @@ async function leerFactura() {
   }
 }
 $('#btn-leer').addEventListener('click', leerFactura);
+
+/* ---------- Con Claude (chat): se copian las reglas, Claude lee la foto y su respuesta se pega aquí ---------- */
+const INSTRUCCIONES_CLAUDE = () => REGLAS + '\n\n' + FORMATO_JSON +
+  '\n\nTe adjunto la factura (fotos o PDF). Devuélveme SOLO el JSON en un bloque de código, sin explicaciones.';
+async function copiar(texto) {
+  try { await navigator.clipboard.writeText(texto); return true; } catch {}
+  const t = document.createElement('textarea'); t.value = texto; t.style.position = 'fixed'; t.style.opacity = '0';
+  document.body.appendChild(t); t.select(); let ok = false; try { ok = document.execCommand('copy'); } catch {} t.remove(); return ok;
+}
+$('#btn-claude-copiar').addEventListener('click', async () => {
+  const ok = await copiar(INSTRUCCIONES_CLAUDE());
+  toast(ok ? 'Instrucciones copiadas: pégalas en Claude y adjunta la foto' : 'No se pudieron copiar las instrucciones');
+  if (ok) window.open('https://claude.ai/new', '_blank', 'noopener');
+});
+$('#btn-claude-pegar').addEventListener('click', async () => {
+  $('#f-pegar').value = '';
+  abrir('#ov-pegar');
+  try { const t = await navigator.clipboard.readText(); if (/\{[\s\S]*"lineas"/.test(t)) $('#f-pegar').value = t; } catch {}
+  $('#f-pegar').focus();
+});
+function usarDatos(d, origen) {
+  const datos = normalizar(d);
+  if (!datos.lineas.length) throw new Error('No hay ningún producto en la respuesta');
+  F = {
+    proveedor: datos.proveedor, fecha: datos.fecha, numero: datos.numero, avisos: datos.avisos,
+    lineas: datos.lineas.map((l, i) => ({ ...l, id: i, mg: CAT[l.categoria]?.mg ?? null, cruce: null }))
+  };
+  F.lineas.forEach(l => { l.cruce = cruzar(l); });
+  lsSet('facturaActual', F);
+  const dudas = F.lineas.filter(l => l.dudoso || l.mg == null).length;
+  estado(`${origen} ${F.lineas.length} productos${dudas ? `, ${dudas} para revisar` : ''}.`, 'ok');
+  pintar();
+  $('#card-datos').scrollIntoView({ behavior: 'smooth' });
+}
+$('#btn-pegar-usar').addEventListener('click', () => {
+  const t = $('#f-pegar').value, ini = t.indexOf('{'), fin = t.lastIndexOf('}');
+  try {
+    if (ini < 0 || fin < ini) throw new Error('No encuentro el JSON en lo que has pegado');
+    usarDatos(JSON.parse(t.slice(ini, fin + 1)), 'Claude ha leído');
+    cerrar();
+    if (!archivos.length) toast('Si quieres guardar también la foto en Drive, añádela arriba antes de guardar');
+  } catch (e) {
+    toast(e instanceof SyntaxError ? 'La respuesta está incompleta: cópiala entera otra vez' : e.message);
+  }
+});
 
 /* ---------- Pintar resultados ---------- */
 function opcionesCat(sel) {
@@ -837,9 +894,42 @@ function pintarAjustes() {
   $('#l-clave').textContent = 'Clave gratuita de ' + L.nombre;
   $('#f-clave').value = ''; $('#f-clave').placeholder = c ? 'Clave guardada (…' + c.slice(-4) + ')' : L.ejemplo;
   $('#t-clave').innerHTML = `Se saca gratis, sin tarjeta, en <a href="${L.web}" target="_blank" rel="noopener">${L.web.replace('https://', '')}</a> (puedes entrar con tu cuenta de Google). Se guarda solo en este dispositivo. El plan gratuito tiene un límite de facturas al día y ${esc(L.nombre)} puede usar lo que se envía para mejorar sus productos.`;
+  pintarModelos(lector, lsGet('listaModelos_' + lector, null)?.m || []);
+  if (c) listaModelos(lector, c).then(m => { if (lectorActual() === lector) pintarModelos(lector, m); });   // m = null si falla
   const st = window.DrivePedidos?.status();
   $('#drive-estado').textContent = !st?.configured ? 'Drive no está disponible.' : st.connected ? `Se guarda en la cuenta ${st.account}${st.active ? ' (conectado)' : ''}.` : 'Desconectado en este dispositivo.';
 }
+
+/* Modelos que se pueden elegir: los que el servicio ofrece a esa clave y saben leer fotos */
+async function listaModelos(lector, clave) {
+  try {
+    let ids;
+    if (lector === 'gemini') {
+      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', { headers: { 'x-goog-api-key': clave } });
+      if (!r.ok) return null;
+      ids = ((await r.json()).models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+        .map(m => m.name.replace(/^models\//, '')).filter(id => /^gemini-\d+(\.\d+)?-(flash|pro)(-lite)?(-preview)?$/.test(id))
+        .sort((a, b) => version(b) - version(a) || a.localeCompare(b));
+      if (ids.some(id => version(id) >= 3)) ids = ids.filter(id => version(id) >= 3);   // los 2.x ya dan error de "modelo antiguo"
+    } else {
+      const r = await fetch('https://api.groq.com/openai/v1/models', { headers: { Authorization: 'Bearer ' + clave } });
+      if (!r.ok) return null;
+      ids = ((await r.json()).data || []).map(m => m.id).filter(id => /vision|\bvl\b|-vl-|scout|maverick|muse|pixtral|llava|qwen\/qwen3\.\d+-\d+b/i.test(id));
+      if (!ids.includes(GROQ_MODELO)) ids.unshift(GROQ_MODELO);
+    }
+    lsSet('listaModelos_' + lector, { t: Date.now(), m: ids });
+    return ids;
+  } catch { return null; }
+}
+function pintarModelos(lector, ids) {   // ids = null si no se pudo pedir la lista
+  const actual = lsGet('modelo_' + lector, 'auto');
+  const lista = [...new Set([...(ids || []), ...(actual !== 'auto' ? [actual] : [])])];
+  $('#f-modelo').innerHTML = `<option value="auto">Automático (recomendado)</option>` + lista.map(id => `<option value="${esc(id)}">${esc(id)}${id === GROQ_MODELO ? ' · recomendado' : /lite/.test(id) ? ' · más rápido' : /pro/.test(id) ? ' · más preciso, más lento' : ''}</option>`).join('');
+  $('#f-modelo').value = actual;
+  $('#t-modelo').textContent = !lsGet(LECTORES[lector].clave, '') ? 'Guarda primero la clave para ver todos los modelos.'
+    : ids === null ? 'No se pudo cargar la lista de modelos (revisa la clave).' : lista.length ? '' : 'Cargando la lista de modelos…';
+}
+$('#f-modelo').addEventListener('change', e => { lsSet('modelo_' + lectorActual(), e.target.value); toast('Modelo elegido: ' + (e.target.value === 'auto' ? 'automático' : e.target.value)); });
 $('#btn-guardar-clave').addEventListener('click', () => {
   const v = $('#f-clave').value.trim();
   if (v.length < 30 || /\s/.test(v)) return toast('Esa clave no parece completa: cópiala entera');
