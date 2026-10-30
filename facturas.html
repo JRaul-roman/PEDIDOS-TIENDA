@@ -381,7 +381,7 @@ function cruzar(l) {
 const b64 = buf => { let s = ''; const b = new Uint8Array(buf); for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); };
 async function prepararImagen(file) {
   const bmp = await createImageBitmap(file);
-  const max = 2000, k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const max = 1600, k = Math.min(1, max / Math.max(bmp.width, bmp.height));
   const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
   c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
   const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
@@ -465,14 +465,17 @@ async function leerFactura() {
   if (!clave) { abrir('#ov-ajustes'); toast('Primero pon la clave gratuita de Google'); return; }
   if (!archivos.length) { toast('Añade primero las fotos o el PDF de la factura'); return; }
   const btn = $('#btn-leer'); btn.disabled = true;
-  estado('Leyendo la factura… puede tardar un minuto.');
+  const inicio = Date.now();
+  const reloj = setInterval(() => estado(`Leyendo la factura… ${Math.round((Date.now() - inicio) / 1000)} s`), 1000);
+  estado('Leyendo la factura…');
   try {
     const partes = archivos.map(a => ({ inlineData: { mimeType: a.type, data: a.data } }));
     partes.push({ text: `Lee esta factura (${archivos.length} ${archivos.length === 1 ? 'archivo' : 'archivos'}, en orden) y devuelve sus líneas clasificadas.` });
     const r = await pedirGemini(clave, {
       systemInstruction: { parts: [{ text: REGLAS }] },
       contents: [{ role: 'user', parts: partes }],
-      generationConfig: { responseMimeType: 'application/json', responseSchema: sinAdicionales(SCHEMA), maxOutputTokens: 32768 }
+      // Razonamiento bajo: leer y clasificar una factura no necesita más, y tarda mucho menos
+      generationConfig: { responseMimeType: 'application/json', responseSchema: sinAdicionales(SCHEMA), maxOutputTokens: 32768, thinkingConfig: { thinkingLevel: 'low' } }
     });
     const cand = r.candidates?.[0];
     if (!cand || r.promptFeedback?.blockReason) throw new Error('Google no ha querido leer este documento.');
@@ -485,11 +488,13 @@ async function leerFactura() {
     };
     F.lineas.forEach(l => { l.cruce = cruzar(l); });
     lsSet('facturaActual', F);
+    clearInterval(reloj);
     const dudas = F.lineas.filter(l => l.dudoso || l.mg == null).length;
     estado(`He leído ${F.lineas.length} productos${dudas ? `, ${dudas} para revisar` : ''}.`, 'ok');
     pintar();
     $('#card-datos').scrollIntoView({ behavior: 'smooth' });
   } catch (e) {
+    clearInterval(reloj);
     const s = e?.status, m = e?.message || String(e);
     estado(/API key not valid|API_KEY_INVALID/i.test(m) || s === 401 ? 'La clave de Google no es válida. Revísala en Ajustes (cópiala entera otra vez).'
       : /location is not supported/i.test(m) ? 'Google no permite usar su IA gratuita desde esta conexión (¿VPN activada?). Desactiva la VPN y vuelve a intentarlo.'
