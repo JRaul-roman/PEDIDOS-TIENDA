@@ -121,6 +121,11 @@ b.final{font-size:15px}
       <div class="thumbs" id="thumbs"></div>
     </div>
     <div class="row" style="margin-top:14px">
+      <div class="field" style="max-width:190px"><label for="s-lector">IA que lee</label>
+        <select id="s-lector"><option value="groq">Groq</option><option value="gemini">Google Gemini</option></select></div>
+      <div class="field"><label for="s-modelo">Modelo</label><select id="s-modelo"></select></div>
+    </div>
+    <div class="row" style="margin-top:10px">
       <button class="btn primary" id="btn-leer" style="flex:1">Leer factura</button>
     </div>
     <div id="estado" class="status info hidden" style="margin-top:12px"></div>
@@ -642,19 +647,40 @@ const LECTORES = {
 };
 const lectorActual = () => LECTORES[lsGet('lector', 'groq')] ? lsGet('lector', 'groq') : 'groq';
 
+// Se empieza por la IA elegida; si falla o tarda más de TIEMPO_IA, se pasa a la otra (si tiene clave guardada)
+const TIEMPO_IA = 45000;
 async function leerFactura() {
-  const lector = lectorActual(), L = LECTORES[lector], clave = lsGet(L.clave, '');
-  if (!clave) { abrir('#ov-ajustes'); toast('Primero pon la clave gratuita de ' + L.nombre); return; }
+  const elegido = lectorActual();
+  const orden = [elegido, ...Object.keys(LECTORES).filter(x => x !== elegido)].filter(x => lsGet(LECTORES[x].clave, ''));
+  if (!orden.length) { abrir('#ov-ajustes'); toast('Primero pon la clave gratuita de ' + LECTORES[elegido].nombre); return; }
   if (!archivos.length) { toast('Añade primero las fotos o el PDF de la factura'); return; }
   const btn = $('#btn-leer'); btn.disabled = true;
   const inicio = Date.now();
   leyendoCon = '';
   const reloj = setInterval(() => estado(`Leyendo la factura${leyendoCon ? ' con ' + leyendoCon.replace('gemini-', 'Gemini ') : ''}… ${Math.round((Date.now() - inicio) / 1000)} s`), 1000);
   estado('Leyendo la factura…');
+  let L = LECTORES[orden[0]];
   try {
-    const datos = lector === 'groq' ? await leerConGroq(clave) : await leerConGemini(clave);
-    clearInterval(reloj);
-    usarDatos(datos, `He leído en ${Math.round((Date.now() - inicio) / 1000)} s`);
+    let error;
+    for (const [i, lector] of orden.entries()) {
+      L = LECTORES[lector];
+      const clave = lsGet(L.clave, ''), hayOtra = i < orden.length - 1;
+      if (i > 0) toast(`${LECTORES[orden[i - 1]].nombre} no ha podido; pruebo con ${L.nombre}`);
+      leyendoCon = L.nombre;
+      try {
+        const lectura = lector === 'groq' ? leerConGroq(clave) : leerConGemini(clave);
+        const datos = hayOtra
+          ? await Promise.race([lectura, new Promise((_, mal) => setTimeout(() => mal(Object.assign(new Error(L.nombre + ' tarda demasiado'), { status: 504 })), TIEMPO_IA))])
+          : await lectura;
+        clearInterval(reloj);
+        usarDatos(datos, `${L.nombre} ha leído en ${Math.round((Date.now() - inicio) / 1000)} s`);
+        return;
+      } catch (e) {
+        console.warn(L.nombre, e);
+        error = e;
+      }
+    }
+    throw error;
   } catch (e) {
     clearInterval(reloj);
     const s = e?.status, m = e?.message || String(e), n = L.nombre;
@@ -942,19 +968,28 @@ async function listaModelos(lector, clave) {
 function pintarModelos(lector, ids) {   // ids = null si no se pudo pedir la lista
   const actual = lsGet('modelo_' + lector, 'auto');
   const lista = [...new Set([...(ids || []), ...(actual !== 'auto' ? [actual] : [])])];
-  $('#f-modelo').innerHTML = `<option value="auto">Automático (recomendado)</option>` + lista.map(id => `<option value="${esc(id)}">${esc(id)}${id === GROQ_MODELO ? ' · recomendado' : /lite/.test(id) ? ' · más rápido' : /pro/.test(id) ? ' · más preciso, más lento' : ''}</option>`).join('');
-  $('#f-modelo').value = actual;
+  // El mismo desplegable está junto a "Leer factura" y en Ajustes
+  const opciones = `<option value="auto">Automático (recomendado)</option>` + lista.map(id => `<option value="${esc(id)}">${esc(id)}${id === GROQ_MODELO ? ' · recomendado' : /lite/.test(id) ? ' · más rápido' : /pro/.test(id) ? ' · más preciso, más lento' : ''}</option>`).join('');
+  for (const sel of ['#f-modelo', '#s-modelo']) { $(sel).innerHTML = opciones; $(sel).value = actual; }
+  $('#f-lector').value = $('#s-lector').value = lector;
   $('#t-modelo').textContent = !lsGet(LECTORES[lector].clave, '') ? 'Guarda primero la clave para ver todos los modelos.'
     : ids === null ? 'No se pudo cargar la lista de modelos (revisa la clave).' : lista.length ? '' : 'Cargando la lista de modelos…';
 }
-$('#f-modelo').addEventListener('change', e => { lsSet('modelo_' + lectorActual(), e.target.value); toast('Modelo elegido: ' + (e.target.value === 'auto' ? 'automático' : e.target.value)); });
+['#f-modelo', '#s-modelo'].forEach(sel => $(sel).addEventListener('change', e => {
+  lsSet('modelo_' + lectorActual(), e.target.value);
+  pintarModelos(lectorActual(), lsGet('listaModelos_' + lectorActual(), null)?.m || []);
+  toast('Modelo elegido: ' + (e.target.value === 'auto' ? 'automático' : e.target.value));
+}));
 $('#btn-guardar-clave').addEventListener('click', () => {
   const v = $('#f-clave').value.trim();
   if (v.length < 30 || /\s/.test(v)) return toast('Esa clave no parece completa: cópiala entera');
   lsSet(LECTORES[lectorActual()].clave, v); pintarAjustes(); toast('Clave guardada en este dispositivo');
 });
 $('#btn-borrar-clave').addEventListener('click', () => { try { localStorage.removeItem(LECTORES[lectorActual()].clave); } catch {} pintarAjustes(); toast('Clave borrada'); });
-$('#f-lector').addEventListener('change', e => { lsSet('lector', e.target.value); pintarAjustes(); });
+['#f-lector', '#s-lector'].forEach(sel => $(sel).addEventListener('change', e => {
+  lsSet('lector', e.target.value); pintarAjustes();
+  if (!lsGet(LECTORES[e.target.value].clave, '')) toast('Falta la clave de ' + LECTORES[e.target.value].nombre + ': ponla en Ajustes');
+}));
 $('#btn-drive-conectar').addEventListener('click', () => DrivePedidos.connect().then(() => { pintarAjustes(); toast('Drive conectado'); }, e => toast(e.message)));
 
 $('#btn-nueva').addEventListener('click', () => {
@@ -964,6 +999,7 @@ $('#btn-nueva').addEventListener('click', () => {
 
 /* ---------- Inicio ---------- */
 pintarHistorial();
+pintarAjustes();   // rellena la IA y el modelo elegidos junto a "Leer factura"
 pintar();
 cargarPvp().then(() => { if (F) { F.lineas.forEach(l => { if (!l.cruce || l.cruce.estado === 'sin_lista') l.cruce = cruzar(l); }); pintar(); } });
 </script>
