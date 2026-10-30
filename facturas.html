@@ -162,8 +162,8 @@ b.final{font-size:15px}
 <div class="overlay" id="ov-ajustes">
   <div class="sheet">
     <div class="card-head"><h2>Ajustes</h2><button class="btn sm" data-cerrar>Cerrar</button></div>
-    <div class="field"><label for="f-clave">Clave de la API de Claude</label><input id="f-clave" type="password" autocomplete="off" placeholder="sk-ant-..."></div>
-    <p class="small muted">Se guarda solo en este dispositivo. Se crea en console.anthropic.com → API Keys. Cada factura leída cuesta unos céntimos.</p>
+    <div class="field"><label for="f-clave">Clave gratuita de Google (Gemini)</label><input id="f-clave" type="password" autocomplete="off" placeholder="AIza..."></div>
+    <p class="small muted">Se saca gratis en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> con tu cuenta de Google, sin tarjeta. Se guarda solo en este dispositivo. En el plan gratuito hay un límite de facturas al día y Google puede usar lo que se envía para mejorar sus productos.</p>
     <div class="row"><button class="btn primary" id="btn-guardar-clave">Guardar clave</button><button class="btn" id="btn-borrar-clave">Borrar clave</button></div>
     <hr style="border:0;border-top:1px solid var(--border);margin:16px 0">
     <h2>Google Drive</h2>
@@ -186,7 +186,8 @@ b.final{font-size:15px}
 
 <script src="drive-pedidos.js"></script>
 <script type="module">
-const SDK_URL = 'https://esm.sh/@anthropic-ai/sdk@0.134.0';
+// Gemini de Google: plan gratuito con límite diario. Si el primer modelo no está disponible, se usa el siguiente.
+const MODELOS = ['gemini-3.8-flash', 'gemini-2.5-flash'];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n == null || isNaN(n)) ? '' : n.toFixed(2).replace('.', ',');
@@ -407,40 +408,44 @@ $('#in-camara').addEventListener('change', e => { anadirArchivos([...e.target.fi
 $('#in-archivos').addEventListener('change', e => { anadirArchivos([...e.target.files]); e.target.value = ''; });
 $('#thumbs').addEventListener('click', e => { const b = e.target.closest('[data-quitar]'); if (b) { archivos.splice(+b.dataset.quitar, 1); pintarMiniaturas(); } });
 
-/* ---------- Leer con Claude ---------- */
+/* ---------- Leer con Gemini ---------- */
 const estado = (msg, tipo = 'info') => { const e = $('#estado'); if (!msg) return e.classList.add('hidden'); e.className = 'status ' + tipo; e.textContent = msg; };
+// Gemini no admite additionalProperties en el esquema de respuesta
+const sinAdicionales = o => Array.isArray(o) ? o.map(sinAdicionales) : (o && typeof o === 'object')
+  ? Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'additionalProperties').map(([k, v]) => [k, sinAdicionales(v)])) : o;
+
+async function pedirGemini(clave, cuerpo) {
+  let ultimo;
+  for (const modelo of MODELOS) {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave }, body: JSON.stringify(cuerpo)
+    });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) return j;
+    ultimo = Object.assign(new Error(j.error?.message || 'Error ' + r.status), { status: r.status, info: j.error });
+    if (![404, 429, 503].includes(r.status)) break;   // otro modelo solo si este no existe, está saturado o agotó su cupo gratis
+  }
+  throw ultimo;
+}
 
 async function leerFactura() {
-  const clave = lsGet('claveClaude', '');
-  if (!clave) { abrir('#ov-ajustes'); toast('Primero pon la clave de la API de Claude'); return; }
+  const clave = lsGet('claveGemini', '');
+  if (!clave) { abrir('#ov-ajustes'); toast('Primero pon la clave gratuita de Google'); return; }
   if (!archivos.length) { toast('Añade primero las fotos o el PDF de la factura'); return; }
   const btn = $('#btn-leer'); btn.disabled = true;
   estado('Leyendo la factura… puede tardar un minuto.');
   try {
-    const { default: Anthropic } = await import(SDK_URL);
-    const client = new Anthropic({ apiKey: clave, dangerouslyAllowBrowser: true });
-    const contenido = archivos.map(a => a.type === 'application/pdf'
-      ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: a.data } }
-      : { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: a.data } });
-    contenido.push({ type: 'text', text: `Lee esta factura (${archivos.length} ${archivos.length === 1 ? 'archivo' : 'archivos'}, en orden) y devuelve sus líneas clasificadas.` });
-    const peticion = {
-      model: 'claude-opus-5-5',
-      max_tokens: 16000,
-      system: REGLAS,
-      output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
-      messages: [{ role: 'user', content: contenido }]
-    };
-    let r;
-    try {
-      // Si Claude rechaza la petición, la API la repite con otro modelo (fallbacks).
-      r = await client.beta.messages.create({ ...peticion, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });
-    } catch (e) {
-      if (e?.status !== 400) throw e;   // si la cuenta no admite fallbacks, se repite sin ellos
-      r = await client.messages.create(peticion);
-    }
-    if (r.stop_reason === 'refusal') throw new Error('Claude no ha podido leer este documento.');
-    if (r.stop_reason === 'max_tokens') throw new Error('La factura es demasiado larga: léela por partes (menos fotos cada vez).');
-    const texto = r.content.find(b => b.type === 'text')?.text;
+    const partes = archivos.map(a => ({ inlineData: { mimeType: a.type, data: a.data } }));
+    partes.push({ text: `Lee esta factura (${archivos.length} ${archivos.length === 1 ? 'archivo' : 'archivos'}, en orden) y devuelve sus líneas clasificadas.` });
+    const r = await pedirGemini(clave, {
+      systemInstruction: { parts: [{ text: REGLAS }] },
+      contents: [{ role: 'user', parts: partes }],
+      generationConfig: { responseMimeType: 'application/json', responseSchema: sinAdicionales(SCHEMA), maxOutputTokens: 32768 }
+    });
+    const cand = r.candidates?.[0];
+    if (!cand || r.promptFeedback?.blockReason) throw new Error('Google no ha querido leer este documento.');
+    if (cand.finishReason === 'MAX_TOKENS') throw new Error('La factura es demasiado larga: léela por partes (menos fotos cada vez).');
+    const texto = (cand.content?.parts || []).filter(p => !p.thought && p.text).map(p => p.text).join('');
     const datos = JSON.parse(texto);
     F = {
       proveedor: datos.proveedor, fecha: datos.fecha, numero: datos.numero, avisos: datos.avisos,
@@ -453,11 +458,12 @@ async function leerFactura() {
     pintar();
     $('#card-datos').scrollIntoView({ behavior: 'smooth' });
   } catch (e) {
-    const s = e?.status;
-    estado(s === 401 ? 'La clave de la API no es válida. Revísala en Ajustes.'
-      : s === 429 ? 'Demasiadas peticiones o sin saldo en la cuenta de Claude. Espera un poco o revisa el saldo.'
-      : s >= 500 ? 'Claude no responde ahora mismo. Vuelve a intentarlo en un momento.'
-      : 'No se pudo leer: ' + (e?.message || e), 'error');
+    const s = e?.status, m = e?.message || String(e);
+    estado(/API key not valid|API_KEY_INVALID/i.test(m) || s === 401 || s === 403 ? 'La clave de Google no es válida. Revísala en Ajustes.'
+      : s === 429 ? 'Has llegado al límite gratuito de Google por ahora. Espera un rato (o hasta mañana) y vuelve a intentarlo.'
+      : s >= 500 ? 'Google no responde ahora mismo. Vuelve a intentarlo en un momento.'
+      : e instanceof SyntaxError ? 'La respuesta ha llegado incompleta. Vuelve a pulsar Leer factura.'
+      : 'No se pudo leer: ' + m, 'error');
   } finally {
     btn.disabled = false;
   }
@@ -652,17 +658,17 @@ document.querySelectorAll('[data-cerrar]').forEach(b => b.addEventListener('clic
 document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) cerrar(); }));
 $('#btn-ajustes').addEventListener('click', () => abrir('#ov-ajustes'));
 function pintarAjustes() {
-  const c = lsGet('claveClaude', '');
-  $('#f-clave').value = ''; $('#f-clave').placeholder = c ? 'Clave guardada (…' + c.slice(-4) + ')' : 'sk-ant-...';
+  const c = lsGet('claveGemini', '');
+  $('#f-clave').value = ''; $('#f-clave').placeholder = c ? 'Clave guardada (…' + c.slice(-4) + ')' : 'AIza...';
   const st = window.DrivePedidos?.status();
   $('#drive-estado').textContent = !st?.configured ? 'Drive no está disponible.' : st.connected ? `Se guarda en la cuenta ${st.account}${st.active ? ' (conectado)' : ''}.` : 'Desconectado en este dispositivo.';
 }
 $('#btn-guardar-clave').addEventListener('click', () => {
   const v = $('#f-clave').value.trim();
-  if (!v.startsWith('sk-ant-')) return toast('La clave empieza por sk-ant-');
-  lsSet('claveClaude', v); pintarAjustes(); toast('Clave guardada en este dispositivo');
+  if (v.length < 30 || /\s/.test(v)) return toast('Esa clave no parece completa: cópiala entera');
+  lsSet('claveGemini', v); pintarAjustes(); toast('Clave guardada en este dispositivo');
 });
-$('#btn-borrar-clave').addEventListener('click', () => { try { localStorage.removeItem('claveClaude'); } catch {} pintarAjustes(); toast('Clave borrada'); });
+$('#btn-borrar-clave').addEventListener('click', () => { try { localStorage.removeItem('claveGemini'); } catch {} pintarAjustes(); toast('Clave borrada'); });
 $('#btn-drive-conectar').addEventListener('click', () => DrivePedidos.connect().then(() => { pintarAjustes(); toast('Drive conectado'); }, e => toast(e.message)));
 
 $('#btn-nueva').addEventListener('click', () => {
