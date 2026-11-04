@@ -243,6 +243,7 @@ textarea.in{min-height:180px;font:13px/1.4 ui-monospace,Consolas,monospace}
 <div id="print-root"></div>
 <div class="toast" id="toast"></div>
 
+<script src="drive-pedidos.js"></script>
 <script>
 'use strict';
 /* =================== Códigos de barras (sin librerías, funciona sin internet) =================== */
@@ -759,12 +760,45 @@ $('#btn-imprimir').onclick = async () => {
   window.print();
 };
 /* =================== Pasar a Labeljoy =================== */
-// Labeljoy (ETIQUETAS.lpa) lee D:\CARTELES ESTANTERIAS\ETIQUETAS.xlsx, hoja Sheet1, columnas DESCRIPCION · PRECIO ·
-// CODIGO BARRAS (el código como texto para no perder ceros). Una fila por etiqueta: las copias se repiten.
+// Labeljoy (ETIQUETAS.lpa) lee un ETIQUETAS.xlsx: hoja Sheet1, columnas DESCRIPCION · PRECIO · CODIGO BARRAS (el código
+// como texto para no perder ceros). Una fila por etiqueta: las copias se repiten.
+// Se guarda en Drive › Labeljoy › ETIQUETAS.xlsx (siempre el mismo archivo, que Labeljoy lee de G:\Mi unidad\Labeljoy),
+// con el permiso de Drive de Pedidos (drive-pedidos.js). Sin Drive, se guarda en el ordenador como antes.
+async function dfetch(token, url, opts = {}) {
+  const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + token } });
+  if (!r.ok) { let m = ''; try { m = (await r.json()).error?.message || ''; } catch {} throw new Error(`Drive respondió ${r.status}${m ? ': ' + m : ''}`); }
+  return r.json();
+}
+async function carpetaDrive(token, nombre, padre) {
+  const q = encodeURIComponent(`name='${nombre}' and mimeType='application/vnd.google-apps.folder' and trashed=false and '${padre}' in parents`);
+  const f = await dfetch(token, `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&spaces=drive`);
+  if (f.files?.[0]) return f.files[0].id;
+  return (await dfetch(token, 'https://www.googleapis.com/drive/v3/files?fields=id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: nombre, mimeType: 'application/vnd.google-apps.folder', parents: [padre] }) })).id;
+}
+async function guardarEnDriveLabeljoy(token, blob) {
+  const XMIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const carpeta = await carpetaDrive(token, 'Labeljoy', 'root');
+  let id = lsGet('etq-labeljoy-id', null);
+  if (id) { try { const f = await dfetch(token, `https://www.googleapis.com/drive/v3/files/${id}?fields=id,trashed,parents`); if (f.trashed || !(f.parents || []).includes(carpeta)) id = null; } catch { id = null; } }
+  if (!id) {
+    const q = encodeURIComponent(`name='ETIQUETAS.xlsx' and trashed=false and '${carpeta}' in parents`);
+    id = (await dfetch(token, `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&spaces=drive`)).files?.[0]?.id || null;
+  }
+  const fd = new FormData();
+  fd.append('metadata', new Blob([JSON.stringify(id ? { name: 'ETIQUETAS.xlsx' } : { name: 'ETIQUETAS.xlsx', parents: [carpeta], mimeType: XMIME })], { type: 'application/json' }));
+  fd.append('file', blob);
+  const f = await dfetch(token, id ? `https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=multipart&fields=id`
+                                   : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { method: id ? 'PATCH' : 'POST', body: fd });
+  lsSet('etq-labeljoy-id', f.id);
+}
 $('#btn-labeljoy').onclick = async () => {
   const filas = [];
   for (const l of lista) for (let k = 0; k < (l.q || 0); k++) filas.push([l.d, Math.round(l.p * 100) / 100, String(l.c || '')]);
   if (!filas.length) { toast('La lista está vacía'); return; }
+  // el permiso de Google se pide dentro del clic (si no, el navegador bloquea la ventana)
+  const conDrive = window.DrivePedidos?.status().configured && window.DrivePedidos.status().connected;
+  const tokenP = conDrive ? DrivePedidos.ensure(true) : null;
+  if (tokenP) tokenP.catch(() => {});
   try {
     if (!window.XLSX) await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
     const hoja = XLSX.utils.aoa_to_sheet([['DESCRIPCION', 'PRECIO', 'CODIGO BARRAS'], ...filas]);
@@ -772,7 +806,14 @@ $('#btn-labeljoy').onclick = async () => {
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, 'Sheet1');
     const blob = new Blob([XLSX.write(libro, { bookType: 'xlsx', type: 'array', bookSST: true })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    if (window.showSaveFilePicker) {
+    let enDrive = false;
+    if (tokenP) {
+      try { $('#btn-labeljoy').textContent = 'Guardando…'; await guardarEnDriveLabeljoy(await tokenP, blob); enDrive = true; }
+      catch (e) { console.warn('Drive Labeljoy:', e); }
+      finally { $('#btn-labeljoy').textContent = 'Pasar a Labeljoy'; }
+    }
+    if (enDrive) { /* guardado en Drive › Labeljoy */ }
+    else if (window.showSaveFilePicker) {
       // el navegador recuerda la carpeta: la primera vez, elegir D:\CARTELES ESTANTERIAS\ETIQUETAS.xlsx y reemplazarlo
       const h = await window.showSaveFilePicker({ id: 'labeljoy', suggestedName: 'ETIQUETAS.xlsx', types: [{ description: 'Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }] });
       const w = await h.createWritable(); await w.write(blob); await w.close();
@@ -780,7 +821,8 @@ $('#btn-labeljoy').onclick = async () => {
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ETIQUETAS.xlsx'; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     }
-    toast(`${filas.length} etiquetas en ETIQUETAS.xlsx. En Labeljoy: «Rellenar e imprimir»`);
+    toast(enDrive ? `${filas.length} etiquetas en Drive › Labeljoy › ETIQUETAS.xlsx. En Labeljoy: «Rellenar e imprimir»`
+      : `${tokenP ? 'Drive no respondió: ' : ''}${filas.length} etiquetas guardadas en el ordenador (ETIQUETAS.xlsx)`);
     $('#tras-imprimir').style.display = 'flex';
     $('#tras-imprimir').dataset.n = filas.length;
   } catch (e) {
