@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Prueba de códigos de barras</title>
+<style>
+@page{size:A4 portrait;margin:0}
+html,body{margin:0;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif}
+.hoja{width:210mm;height:280mm;padding:10mm 12mm;box-sizing:border-box}
+h1{font-size:5mm;margin:0 0 1.5mm}
+p{font-size:3mm;margin:0 0 4mm;color:#333}
+.fila{display:flex;align-items:center;gap:6mm;padding:2.5mm 0;border-top:.2mm solid #bbb}
+.letra{font-size:10mm;font-weight:900;width:12mm;text-align:center}
+.cod{display:flex;flex-direction:column;align-items:center;gap:1mm}
+.cod span,.info{font-size:2.6mm;color:#333}
+.info{width:38mm}
+.aviso{font-size:3.2mm;margin:0 0 3mm;padding:2mm 3mm;border:.3mm solid #000}
+@media screen{body{background:#e5e7eb}.hoja{margin:12px auto;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.2)}.boton{display:block;margin:12px auto 0;font:600 16px Arial;padding:12px 22px;border-radius:12px;border:0;background:#111;color:#fff;cursor:pointer}}
+@media print{.boton{display:none}}
+</style>
+</head>
+<body>
+<button class="boton" onclick="print()">Imprimir esta hoja (escala 100 %, márgenes: ninguno)</button>
+<div class="hoja">
+  <h1>Prueba de códigos de barras</h1>
+  <p>Imprime esta hoja como las etiquetas (A4, escala 100 %, márgenes: ninguno) y pasa el lector por cada código. Apunta las letras que lea bien (el de la izquierda es EAN-13 de Glop; el de la derecha, un código interno de Glop).</p>
+  <div class="aviso">La <b>D</b> es como salen ahora las etiquetas. La <b>A</b> es como salían antes de los cambios de hoy, en las etiquetas de 70×37 mm.</div>
+  <div id="filas"></div>
+</div>
+<script>
+'use strict';
+const EAN_L = ['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
+const EAN_R = EAN_L.map(p => p.replace(/./g, c => c === '0' ? '1' : '0'));
+const EAN_G = EAN_R.map(p => p.split('').reverse().join(''));
+const EAN_PAR = ['LLLLLL','LLGLGG','LLGGLG','LLGGGL','LGLLGG','LGGLLG','LGGGLL','LGLGLG','LGLGGL','LGGLGL'];
+const C128 = ['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232'];
+const C128_STOP = '2331112';
+
+function digitoControl(s) { // EAN/UPC: pesos 3,1 desde la derecha
+  let t = 0;
+  for (let i = 0; i < s.length; i++) t += (+s[s.length - 1 - i]) * (i % 2 === 0 ? 3 : 1);
+  return (10 - t % 10) % 10;
+}
+function eanValido(s) { return /^\d+$/.test(s) && digitoControl(s.slice(0, -1)) === +s.slice(-1); }
+
+function ean13(s) {
+  const par = EAN_PAR[+s[0]];
+  let m = '101';
+  for (let i = 1; i <= 6; i++) m += (par[i - 1] === 'L' ? EAN_L : EAN_G)[+s[i]];
+  m += '01010';
+  for (let i = 7; i <= 12; i++) m += EAN_R[+s[i]];
+  return m + '101';
+}
+function ean8(s) {
+  let m = '101';
+  for (let i = 0; i < 4; i++) m += EAN_L[+s[i]];
+  m += '01010';
+  for (let i = 4; i < 8; i++) m += EAN_R[+s[i]];
+  return m + '101';
+}
+function code128(s) {
+  const vals = [];
+  if (/^\d+$/.test(s) && s.length >= 6) {                            // juego C: pares de dígitos (más compacto)
+    vals.push(105);
+    const par = s.length - (s.length % 2);
+    for (let i = 0; i < par; i += 2) vals.push(+s.substr(i, 2));
+    if (s.length % 2) vals.push(100, s.charCodeAt(s.length - 1) - 32);  // último dígito suelto en juego B
+  } else if (/^\d+$/.test(s) && s.length === 4) {
+    vals.push(105, +s.substr(0, 2), +s.substr(2, 2));
+  } else {                                                           // juego B: texto
+    vals.push(104);
+    for (const ch of s) {
+      const c = ch.charCodeAt(0);
+      if (c < 32 || c > 126) return null;
+      vals.push(c - 32);
+    }
+  }
+  let chk = vals[0];
+  for (let i = 1; i < vals.length; i++) chk += vals[i] * i;
+  vals.push(chk % 103);
+  let m = '';
+  const pinta = w => { let b = true; for (const n of w) { m += (b ? '1' : '0').repeat(+n); b = !b; } };
+  vals.forEach(v => pinta(C128[v]));
+  pinta(C128_STOP);
+  return m;
+}
+/* Devuelve {modulos, tipo, quiet} para el código; elige EAN si el dígito de control es correcto */
+function codificar(code) {
+  code = String(code || '').trim();
+  if (!code) return null;
+  // márgenes en blanco algo menores que el estándar: el propio cartel ya deja blanco alrededor
+  if (/^\d{13}$/.test(code) && eanValido(code)) return { m: ean13(code), tipo: 'EAN-13', q: [8, 6] };
+  if (/^\d{12}$/.test(code) && eanValido(code)) return { m: ean13('0' + code), tipo: 'UPC-A', q: [9, 9] };
+  if (/^\d{8}$/.test(code) && eanValido(code)) return { m: ean8(code), tipo: 'EAN-8', q: [7, 7] };
+  const m = code128(code);
+  return m ? { m, tipo: 'Code 128', q: [10, 10] } : null;
+}
+// Mismo dibujo que etiquetas.html, con grosor de barra (mm), alto, márgenes en blanco y compensación de tinta a elegir
+function svgPrueba(code, mod, alto, q, red) {
+  const c = codificar(code); if (!c) return '';
+  const qz = q || (c.tipo === 'EAN-13' ? [11, 7] : c.q), total = qz[0] + c.m.length + qz[1];
+  let d = '', x = qz[0], i = 0;
+  while (i < c.m.length) {
+    if (c.m[i] === '1') { let j = i; while (j < c.m.length && c.m[j] === '1') j++; const w = (j - i - red).toFixed(2); d += `M${(x + i + red / 2).toFixed(2)} 0h${w}v1h-${w}z`; i = j; }
+    else i++;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} 1" preserveAspectRatio="none" style="width:${(total * mod).toFixed(2)}mm;height:${alto}mm;display:block" shape-rendering="crispEdges"><path d="${d}" fill="#000"/></svg>`;
+}
+const VARIANTES = [
+  ['A', 0.35, 13,  null,   0,    '0,35 mm · alto 13 mm · como antes'],
+  ['B', 0.33, 10,  null,   0,    '0,33 mm · alto 10 mm'],
+  ['C', 0.30, 10,  null,   0,    '0,30 mm · alto 10 mm'],
+  ['D', 0.28, 6.7, [8, 6], 0.12, '0,28 mm · alto 6,7 mm · como ahora'],
+  ['E', 0.28, 10,  null,   0,    '0,28 mm · alto 10 mm · sin compensar tinta'],
+  ['F', 0.33, 6.7, null,   0,    '0,33 mm · alto 6,7 mm (bajo, como Labeljoy)'],
+  ['G', 0.33, 10,  null,   0.12, '0,33 mm · alto 10 mm · compensando tinta'],
+  ['H', 0.25, 10,  null,   0,    '0,25 mm · alto 10 mm (pequeño)']
+];
+document.getElementById('filas').innerHTML = VARIANTES.map(([l, mod, alto, q, red, txt]) =>
+  `<div class="fila"><div class="letra">${l}</div><div class="info">${txt}</div>
+   <div class="cod">${svgPrueba('8410524003319', mod, alto, q, red)}<span>8410524003319</span></div>
+   <div class="cod">${svgPrueba('03120', mod, alto, q && [8, 8], red)}<span>03120</span></div></div>`).join('');
+</script>
+</body>
+</html>
