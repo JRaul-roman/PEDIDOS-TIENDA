@@ -645,20 +645,20 @@ function htmlEtiqueta(l, x, y) {
   const W = cfg.w, H = cfg.h;
   const pad = Math.max(1.5, Math.min(W, H) * 0.06);
   const descFs = Math.min(H * 0.105, W * 0.06, 4.6);
-  const altoBarras = Math.max(6, H * 0.32);
+  const altoBarras = Math.max(6, H * 0.28);
   const numFs = Math.min(2.6, Math.max(1.8, H * 0.065));
   let bc = '';
   const c = l.c && codificar(l.c);
   if (c) {
     // ancho de módulo: entre 0,26 y 0,40 mm, que quepa en ~58 % del ancho útil
     const total = c.q[0] + c.m.length + c.q[1];
-    // ~50 % del ancho, sin bajar de 0,25 mm por barra para que el lector lo siga leyendo
-    const mod = Math.max(0.25, Math.min(0.4, (W - 2 * pad) * 0.5 / total));
+    // ~42 % del ancho, sin bajar de 0,22 mm por barra para que el lector lo siga leyendo
+    const mod = Math.max(0.22, Math.min(0.4, (W - 2 * pad) * 0.42 / total));
     const s = svgBarras(l.c, altoBarras, mod);
     bc = `<div class="bc">${s.svg}${cfg.num ? `<div class="num">${esc(l.c)}</div>` : ''}</div>`;
   } else if (l.c) bc = `<div class="bc sinbc">${esc(l.c)}</div>`;
   // Diseño TIENDA NUEVA: precio grande con los céntimos y el € arriba, más pequeños
-  const precioFs = Math.min(H * 0.5, W * 0.25);
+  const precioFs = Math.min(H * 0.56, W * 0.3);
   const [ent, dec] = fmt(l.p).split(',');
   const fecha = cfg.fecha ? `<div class="fecha">${new Date().toLocaleDateString('es-ES')}</div>` : '';
   return `<div class="et${cfg.borde ? ' borde' : ''}" style="left:${x}mm;top:${y}mm;width:${W}mm;height:${H}mm;--pad:${pad.toFixed(2)}mm;--numfs:${numFs.toFixed(2)}mm">
@@ -689,7 +689,8 @@ function ajustarTextos(raiz) {
   // reduce el precio si no cabe al lado del código
   raiz.querySelectorAll('.precio').forEach(p => {
     let fs = parseFloat(p.style.fontSize), i = 0;
-    while (p.scrollWidth > p.clientWidth + 0.5 && i++ < 30) { fs *= 0.93; p.style.fontSize = fs.toFixed(2) + 'mm'; }
+    const et = p.closest('.et');
+    while ((p.scrollWidth > p.clientWidth + 0.5 || et.scrollHeight > et.clientHeight + 0.5) && i++ < 30) { fs *= 0.93; p.style.fontSize = fs.toFixed(2) + 'mm'; }
   });
 }
 function pintarHojas() {
