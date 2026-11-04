@@ -159,6 +159,7 @@ textarea.in{min-height:180px;font:13px/1.4 ui-monospace,Consolas,monospace}
     <div class="card-head"><h2>2. Etiquetas a imprimir <span class="muted small" id="total"></span></h2>
       <div class="row">
         <button class="btn sm" id="btn-vaciar">Vaciar</button>
+        <button class="btn sm" id="btn-labeljoy" title="Guarda la lista como ETIQUETAS.xlsx para imprimirla con Labeljoy">Pasar a Labeljoy</button>
         <button class="btn primary" id="btn-imprimir">Imprimir</button>
       </div>
     </div>
@@ -757,6 +758,37 @@ $('#btn-imprimir').onclick = async () => {
   window.addEventListener('afterprint', despues);
   window.print();
 };
+/* =================== Pasar a Labeljoy =================== */
+// Labeljoy (ETIQUETAS.lpa) lee D:\CARTELES ESTANTERIAS\ETIQUETAS.xlsx, hoja Sheet1, columnas DESCRIPCION · PRECIO ·
+// CODIGO BARRAS (el código como texto para no perder ceros). Una fila por etiqueta: las copias se repiten.
+$('#btn-labeljoy').onclick = async () => {
+  const filas = [];
+  for (const l of lista) for (let k = 0; k < (l.q || 0); k++) filas.push([l.d, Math.round(l.p * 100) / 100, String(l.c || '')]);
+  if (!filas.length) { toast('La lista está vacía'); return; }
+  try {
+    if (!window.XLSX) await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+    const hoja = XLSX.utils.aoa_to_sheet([['DESCRIPCION', 'PRECIO', 'CODIGO BARRAS'], ...filas]);
+    hoja['!cols'] = [{ wch: 46 }, { wch: 12 }, { wch: 18 }];
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, 'Sheet1');
+    const blob = new Blob([XLSX.write(libro, { bookType: 'xlsx', type: 'array', bookSST: true })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    if (window.showSaveFilePicker) {
+      // el navegador recuerda la carpeta: la primera vez, elegir D:\CARTELES ESTANTERIAS\ETIQUETAS.xlsx y reemplazarlo
+      const h = await window.showSaveFilePicker({ id: 'labeljoy', suggestedName: 'ETIQUETAS.xlsx', types: [{ description: 'Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }] });
+      const w = await h.createWritable(); await w.write(blob); await w.close();
+    } else {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ETIQUETAS.xlsx'; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    }
+    toast(`${filas.length} etiquetas en ETIQUETAS.xlsx. En Labeljoy: «Rellenar e imprimir»`);
+    $('#tras-imprimir').style.display = 'flex';
+    $('#tras-imprimir').dataset.n = filas.length;
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    toast(/NotReadable|InvalidState|NoModification|lock/i.test(e.name + e.message) ? 'No se pudo guardar: cierra ETIQUETAS.xlsx en Excel o Labeljoy e inténtalo otra vez' : 'No se pudo guardar: ' + e.message);
+  }
+};
+
 $('#ti-si').onclick = () => {
   const n = +$('#tras-imprimir').dataset.n;
   lista.forEach(l => { if (l.q > 0) impresos[clave(l.c, l.d)] = l.p; });
