@@ -304,8 +304,7 @@ function code128(s) {
 function codificar(code) {
   code = String(code || '').trim();
   if (!code) return null;
-  // márgenes en blanco algo menores que el estándar: el propio cartel ya deja blanco alrededor
-  if (/^\d{13}$/.test(code) && eanValido(code)) return { m: ean13(code), tipo: 'EAN-13', q: [8, 6] };
+  if (/^\d{13}$/.test(code) && eanValido(code)) return { m: ean13(code), tipo: 'EAN-13', q: [11, 7] };
   if (/^\d{12}$/.test(code) && eanValido(code)) return { m: ean13('0' + code), tipo: 'UPC-A', q: [9, 9] };
   if (/^\d{8}$/.test(code) && eanValido(code)) return { m: ean8(code), tipo: 'EAN-8', q: [7, 7] };
   const m = code128(code);
@@ -315,14 +314,16 @@ function svgBarras(code, altoMm, moduloMm) {
   const c = codificar(code);
   if (!c) return null;
   const total = c.q[0] + c.m.length + c.q[1];
+  // Barras enteras en módulos y escala igual en los dos ejes (sin estirar el dibujo): así la impresora las saca
+  // negras y nítidas. Con barras más finas que un módulo salían grises y el lector no las leía.
+  const alto = Math.round(altoMm / moduloMm);
   let d = '', x = c.q[0], i = 0;
   while (i < c.m.length) {
-    // cada barra un 12 % de módulo más fina: la tinta se expande al imprimir y así los huecos no se cierran
-    if (c.m[i] === '1') { let j = i; while (j < c.m.length && c.m[j] === '1') j++; const w = (j - i - 0.12).toFixed(2); d += `M${(x + i + 0.06).toFixed(2)} 0h${w}v1h-${w}z`; i = j; }
+    if (c.m[i] === '1') { let j = i; while (j < c.m.length && c.m[j] === '1') j++; d += `M${x + i} 0h${j - i}v${alto}h-${j - i}z`; i = j; }
     else i++;
   }
   const ancho = total * moduloMm;
-  return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} 1" preserveAspectRatio="none" style="width:${ancho.toFixed(2)}mm;height:${altoMm.toFixed(2)}mm" shape-rendering="crispEdges"><path d="${d}" fill="#000"/></svg>`, tipo: c.tipo, ancho, modulos: total };
+  return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${alto}" style="width:${ancho.toFixed(3)}mm;height:${(alto * moduloMm).toFixed(3)}mm" shape-rendering="crispEdges"><path d="${d}" fill="#000"/></svg>`, tipo: c.tipo, ancho, modulos: total };
 }
 
 /* =================== Utilidades =================== */
@@ -656,13 +657,15 @@ function htmlEtiqueta(l, x, y) {
   let bc = '';
   const c = l.c && codificar(l.c);
   if (c) {
-    // ancho de módulo: entre 0,26 y 0,40 mm, que quepa en ~58 % del ancho útil
+    // Barras de 1/90" (0,282 mm): 4 puntos exactos en las impresoras Epson (360/720 ppp), así salen negras y
+    // nítidas. Con barras de fracciones de punto la impresora las sacaba grises y el lector no las leía.
     const total = c.q[0] + c.m.length + c.q[1];
-    // Barras de 0,28 mm (por encima del mínimo EAN de 0,264): con 0,22 mm la impresora de tinta las emborronaba
-    // y el lector no las leía
-    const mod = Math.max(0.28, Math.min(0.4, (W - 2 * pad) * 0.45 / total));
+    const mod = Math.min(25.4 / 90, (W - 2 * pad) * 0.6 / total);   // solo códigos internos muy largos se estrechan
+    // el código empieza en un múltiplo del módulo desde el borde del papel, para que cada barra caiga en puntos enteros
+    const borde = cfg.borde ? 0.25 : 0;
+    const desfase = Math.ceil((+x + borde + pad) / mod) * mod - (+x + borde + pad);
     const s = svgBarras(l.c, altoBarras, mod);
-    bc = `<div class="bc">${s.svg}${cfg.num ? `<div class="num">${esc(l.c)}</div>` : ''}</div>`;
+    bc = `<div class="bc" style="margin-left:${desfase.toFixed(3)}mm">${s.svg}${cfg.num ? `<div class="num">${esc(l.c)}</div>` : ''}</div>`;
   } else if (l.c) bc = `<div class="bc sinbc">${esc(l.c)}</div>`;
   // Diseño TIENDA NUEVA: precio grande con los céntimos y el € arriba, más pequeños
   const precioFs = Math.min(H * 0.56, W * 0.3);
