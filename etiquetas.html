@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script defer src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
 :root{
   --bg:#f3f4fa; --surface:#ffffff; --surface-2:#f1f3f9; --text:#0f172a; --muted:#64748b; --border:#e3e7f0;
@@ -89,6 +90,12 @@ h2{font-size:16px;margin:0;font-weight:700}
 .sheet-dlg{background:var(--surface);border-radius:var(--radius);padding:16px;width:min(640px,100%);max-height:90vh;overflow:auto}
 textarea.in{min-height:180px;font:13px/1.4 ui-monospace,Consolas,monospace}
 .estado{font-size:12.5px;opacity:.9}
+.scan-inner{background:#0b1020;color:#fff;border-radius:var(--radius);padding:14px;display:grid;gap:12px;width:min(480px,100%)}
+#reader{border-radius:14px;overflow:hidden;background:#000;min-height:240px}
+#reader video{width:100%!important;display:block}
+.scan-status{background:rgba(255,255,255,.08);border-radius:12px;padding:12px;font-size:14px;text-align:center;min-height:46px}
+.scan-status.ok{background:rgba(16,185,129,.2);color:#a7f3d0}
+.scan-status.err{background:rgba(239,68,68,.2);color:#fecaca}
 .badge.nuevo{background:var(--primary-soft);color:var(--primary)}
 .badge.baja{background:transparent;box-shadow:inset 0 0 0 1px currentColor;color:var(--success)}
 .it .p small{font-weight:500;color:var(--muted);text-decoration:line-through;margin-right:4px}
@@ -138,7 +145,10 @@ textarea.in{min-height:180px;font:13px/1.4 ui-monospace,Consolas,monospace}
         <button class="btn sm" id="btn-pegar">Pegar lista</button>
       </div>
     </div>
-    <input class="in" id="q" placeholder="Nombre o código de barras (puedes escanear aquí)" autocomplete="off" autofocus>
+    <div class="row" style="flex-wrap:nowrap">
+      <input class="in" id="q" placeholder="Nombre o código de barras (puedes escanear aquí)" autocomplete="off" autofocus style="flex:1;min-width:0">
+      <button class="btn primary" id="btn-scan" title="Escanear con la cámara"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M14 8v8M17 8v8"/></svg>Escanear</button>
+    </div>
     <div class="res" id="res"></div>
     <p class="small muted" id="cambios-info" style="margin:10px 0 0"></p>
   </section>
@@ -214,6 +224,16 @@ textarea.in{min-height:180px;font:13px/1.4 ui-monospace,Consolas,monospace}
     </div>
     <div class="res" id="mod-lista" style="max-height:50vh"></div>
     <p class="small muted" id="mod-ayuda" style="margin:10px 0 0">La primera vez que abras un archivo, busca <b>Google Drive › Mi unidad › ARTICULOS MODIFICADOS</b>; después el navegador abrirá esa carpeta directamente.</p>
+  </div>
+</div>
+
+<div class="overlay" id="ov-scan">
+  <div class="scan-inner">
+    <div class="card-head" style="margin:0"><h2>Escanear códigos de barras</h2><button class="btn sm" data-cerrar>Cerrar</button></div>
+    <div id="reader"></div>
+    <div class="scan-status" id="scan-status">Apunta la cámara al código de barras</div>
+    <p class="small" style="margin:0;opacity:.75">Cada producto que leas se añade a «Etiquetas a imprimir» y puedes seguir con el siguiente. Si lo lees otra vez, suma una copia.</p>
+    <button class="btn primary" data-cerrar>Terminar</button>
   </div>
 </div>
 
@@ -357,6 +377,55 @@ $('#q').addEventListener('keydown', e => {
   else if (/^\d{4,}$/.test(v)) toast('Ese código no está en Glop');
 });
 $('#res').addEventListener('click', e => { const it = e.target.closest('.it[data-i]'); if (it) { anadir(productos[+it.dataset.i]); $('#q').focus(); } });
+
+/* =================== Escanear con la cámara (como en Pedidos 2.0) =================== */
+let scanner = null, ultimoScan = { code: '', t: 0 }, actx = null;
+function pitido(ok) {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
+    o.frequency.value = ok ? 1175 : 240;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + (ok ? 0.13 : 0.3));
+    o.connect(g).connect(actx.destination); o.start(t); o.stop(t + 0.32);
+  } catch {}
+  if (navigator.vibrate) navigator.vibrate(ok ? 40 : [90, 60, 90]);
+}
+function estadoScan(msg, cls = '') { const el = $('#scan-status'); el.textContent = msg; el.className = 'scan-status ' + cls; }
+async function abrirEscaner() {
+  if (!window.Html5Qrcode) { toast('No se pudo cargar el escáner (¿sin conexión?)'); return; }
+  estadoScan('Apunta la cámara al código de barras');
+  $('#ov-scan').classList.add('on');
+  try {
+    const F = window.Html5QrcodeSupportedFormats;
+    scanner = new Html5Qrcode('reader', {
+      verbose: false, useBarCodeDetectorIfSupported: true,
+      formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.ITF]
+    });
+    await scanner.start({ facingMode: 'environment' },
+      { fps: 12, qrbox: (w, h) => ({ width: Math.floor(w * 0.86), height: Math.max(80, Math.floor(Math.min(h * 0.5, w * 0.42))) }) },
+      leido, () => {});
+  } catch (e) {
+    console.error(e);
+    estadoScan('No se pudo abrir la cámara. Revisa que el navegador tenga permiso.', 'err');
+  }
+}
+async function cerrarEscaner() {
+  const s = scanner; scanner = null;
+  if (s) { try { if (s.isScanning) await s.stop(); s.clear(); } catch {} }
+}
+function leido(code) {
+  const now = Date.now();
+  if (code === ultimoScan.code && now - ultimoScan.t < 2200) return;   // la cámara lee el mismo código varias veces seguidas
+  ultimoScan = { code, t: now };
+  const x = porCodigo.get(code);
+  if (!x) { pitido(false); estadoScan(`El código ${code} no está en Glop`, 'err'); return; }
+  pitido(true);
+  anadir(x);
+  const l = lista.find(e => e.d === x.d && e.c === (x.c || x.o));
+  estadoScan(`✓ ${x.d} · ${fmt(x.p)} €${l && l.q > 1 ? ` · ${l.q} copias` : ''}`, 'ok');
+}
+$('#btn-scan').onclick = abrirEscaner;
+$('#ov-scan').addEventListener('click', e => { if (e.target.closest('[data-cerrar]')) cerrarEscaner(); });
 
 /* =================== Lista de etiquetas =================== */
 let lista = lsGet('etq-lista', []);   // {d, c, p, q, glop}
