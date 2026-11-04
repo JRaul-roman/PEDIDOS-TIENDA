@@ -118,10 +118,12 @@ textarea.in{min-height:180px;font:13px/1.4 ui-monospace,Consolas,monospace}
 
 @media print{
   @page{size:A4 portrait;margin:0}
-  html,body{background:#fff !important;padding:0;margin:0}
+  html,body{background:#fff !important;padding:0;margin:0;min-height:0 !important;height:auto !important}
   body > *:not(#print-root){display:none !important}
   #print-root{display:block !important}
-  #print-root .hoja{box-shadow:none;break-after:page;page-break-after:always}
+  /* al imprimir, la hoja llega solo hasta la última fila: si la impresora da una página algo menor
+     que el A4 (296 mm, por ejemplo), una hoja de 297 mm sacaba otra página en blanco */
+  #print-root .hoja{box-shadow:none;break-after:page;page-break-after:always;height:var(--alto-impresion,297mm)}
   #print-root .hoja:last-child{break-after:auto;page-break-after:auto}
 }
 #print-root{display:none}
@@ -677,6 +679,7 @@ function construirHojas() {
   const inicio = Math.min(Math.max(1, cfg.inicio), porHoja) - 1;
   const huecos = inicio + items.length;
   const nHojas = Math.max(1, Math.ceil(huecos / porHoja));
+  const altoImpresion = Math.min(297, cfg.mt + cfg.filas * cfg.h + (cfg.filas - 1) * cfg.gy + 1);   // hasta la última fila
   let html = '';
   for (let h = 0; h < nHojas; h++) {
     let et = '';
@@ -686,7 +689,7 @@ function construirHojas() {
       const col = s % cfg.cols, fila = Math.floor(s / cfg.cols);
       et += htmlEtiqueta(items[idx], (cfg.ml + col * (cfg.w + cfg.gx)).toFixed(2), (cfg.mt + fila * (cfg.h + cfg.gy)).toFixed(2));
     }
-    html += `<div class="hoja">${et}</div>`;
+    html += `<div class="hoja" style="--alto-impresion:${altoImpresion.toFixed(2)}mm">${et}</div>`;
   }
   return { html, n: items.length, nHojas };
 }
