@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4f46e5">
+<meta name="robots" content="noindex">
+<title>Etiquetas de estantería</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f3f4fa; --surface:#ffffff; --surface-2:#f1f3f9; --text:#0f172a; --muted:#64748b; --border:#e3e7f0;
+  --primary:#4f46e5; --primary-ink:#ffffff; --primary-soft:#eef0ff;
+  --success:#059669; --danger:#dc2626; --warn:#b45309; --warn-soft:#fff6e5;
+  --hero:linear-gradient(125deg,#4338ca 0%,#6d28d9 52%,#c026d3 100%);
+  --shadow:0 1px 2px rgba(15,23,42,.05),0 10px 30px -12px rgba(30,41,90,.18);
+  --radius:20px; color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0a0f1e; --surface:#121a2d; --surface-2:#1a2340; --text:#e6e9f5; --muted:#93a0bb; --border:#232e4b;
+    --primary:#8b8cf8; --primary-ink:#0b1020; --primary-soft:#1f2552;
+    --success:#34d399; --danger:#f87171; --warn:#fbbf24; --warn-soft:#2b2210;
+    --hero:linear-gradient(125deg,#312e81 0%,#4c1d95 55%,#86198f 100%);
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px -14px rgba(0,0,0,.6); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0a0f1e; --surface:#121a2d; --surface-2:#1a2340; --text:#e6e9f5; --muted:#93a0bb; --border:#232e4b;
+  --primary:#8b8cf8; --primary-ink:#0b1020; --primary-soft:#1f2552;
+  --success:#34d399; --danger:#f87171; --warn:#fbbf24; --warn-soft:#2b2210;
+  --hero:linear-gradient(125deg,#312e81 0%,#4c1d95 55%,#86198f 100%);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px -14px rgba(0,0,0,.6); color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.45;min-height:100vh;padding-bottom:40px}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.ic{width:20px;height:20px;flex-shrink:0}
+.muted{color:var(--muted)} .small{font-size:12.5px}
+h2{font-size:16px;margin:0;font-weight:700}
+.hero{background:var(--hero);color:#fff;padding:14px 16px 58px;border-radius:0 0 30px 30px}
+.hero-inner{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:12px}
+.logo{width:44px;height:44px;border-radius:15px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.28);display:grid;place-items:center}
+.brand{min-width:0;flex:1}
+.brand h1{font-size:20px;margin:0;font-weight:800;letter-spacing:-.02em}
+.brand p{margin:0;font-size:12.5px;opacity:.88}
+.layout{max-width:1180px;margin:-42px auto 0;padding:0 16px;display:grid;gap:16px;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}}
+.full{grid-column:1/-1}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;min-width:0}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.btn{border:1px solid var(--border);background:var(--surface-2);border-radius:14px;padding:10px 16px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-ink)}
+.btn.sm{min-height:34px;padding:5px 12px;font-size:13.5px;border-radius:11px}
+.btn:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.in{width:100%;border:1px solid var(--border);background:var(--surface);border-radius:14px;padding:11px 14px;min-height:46px}
+.in:focus{outline:2px solid var(--primary);outline-offset:0;border-color:transparent}
+.res{margin-top:10px;max-height:380px;overflow:auto;border:1px solid var(--border);border-radius:14px}
+.res:empty{display:none}
+.it{display:flex;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border)}
+.it:last-child{border-bottom:0}
+.it .d{flex:1;min-width:0}
+.it .d b{display:block;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it .d span{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.it .p{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.it.click{cursor:pointer} .it.click:hover{background:var(--primary-soft)}
+.add{width:34px;height:34px;border-radius:10px;border:0;background:var(--primary);color:var(--primary-ink);display:grid;place-items:center;font-weight:800;font-size:18px}
+.lst .it input{border:1px solid var(--border);background:var(--surface-2);border-radius:9px;padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums}
+.lst .it input.pr{width:72px} .lst .it input.qt{width:48px}
+.x{border:0;background:none;color:var(--muted);font-size:20px;line-height:1;padding:4px 6px}
+.x:hover{color:var(--danger)}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--warn-soft);color:var(--warn);margin-left:6px}
+.grid-cfg{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.grid-cfg label{font-size:12.5px;color:var(--muted);display:grid;gap:4px}
+.grid-cfg label{min-width:0}
+.grid-cfg input,.grid-cfg select{width:100%;min-width:0;border:1px solid var(--border);background:var(--surface);border-radius:11px;padding:8px 10px;min-height:40px}
+.grid-cfg label:first-child{grid-column:span 2}
+.chk{display:flex;gap:8px;align-items:center;font-size:13.5px}
+.empty{padding:22px;text-align:center;color:var(--muted);font-size:14px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#0f172a;color:#fff;padding:10px 18px;border-radius:12px;font-weight:600;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:calc(100% - 32px)}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.overlay{position:fixed;inset:0;background:rgba(10,15,30,.55);display:none;align-items:center;justify-content:center;padding:16px;z-index:40}
+.overlay.on{display:flex}
+.sheet-dlg{background:var(--surface);border-radius:var(--radius);padding:16px;width:min(640px,100%);max-height:90vh;overflow:auto}
+textarea.in{min-height:180px;font:13px/1.4 ui-monospace,Consolas,monospace}
+.estado{font-size:12.5px;opacity:.9}
+.badge.nuevo{background:var(--primary-soft);color:var(--primary)}
+.badge.baja{background:transparent;box-shadow:inset 0 0 0 1px currentColor;color:var(--success)}
+.it .p small{font-weight:500;color:var(--muted);text-decoration:line-through;margin-right:4px}
+
+/* ---------- Vista previa ---------- */
+.preview-wrap{overflow:auto;background:var(--surface-2);border-radius:14px;padding:14px;max-height:80vh}
+#hojas{zoom:var(--z,.6);display:grid;gap:14px;justify-content:center}
+.hoja{width:210mm;height:297mm;background:#fff;color:#000;position:relative;box-shadow:0 2px 12px rgba(0,0,0,.18);overflow:hidden}
+.et{position:absolute;overflow:hidden;display:flex;flex-direction:column;padding:var(--pad);font-family:Arial,'Helvetica Neue',sans-serif;color:#000}
+.et.borde{outline:.2mm dashed #9aa}
+.et .desc{font-weight:700;line-height:1.12;text-transform:uppercase;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
+.et .abajo{flex:1;display:flex;align-items:flex-end;gap:2mm;min-height:0}
+.et .bc{display:flex;flex-direction:column;align-items:center;flex:0 0 auto}
+.et .bc svg{display:block}
+.et .bc .num{font-size:var(--numfs);letter-spacing:.06em;line-height:1;margin-top:.5mm;font-variant-numeric:tabular-nums}
+.et .precio{flex:1;text-align:right;font-weight:800;line-height:.9;white-space:nowrap;letter-spacing:-.02em;font-variant-numeric:tabular-nums;align-self:center}
+.et .precio small{font-size:.45em;font-weight:700;margin-left:.08em}
+.et .fecha{position:absolute;right:var(--pad);top:calc(var(--pad) * .4);font-size:1.8mm;color:#555}
+.et .sinbc{font-size:2.4mm;color:#777}
+
+@media print{
+  @page{size:A4 portrait;margin:0}
+  html,body{background:#fff !important;padding:0;margin:0}
+  body > *:not(#print-root){display:none !important}
+  #print-root{display:block !important}
+  #print-root .hoja{box-shadow:none;break-after:page;page-break-after:always}
+  #print-root .hoja:last-child{break-after:auto;page-break-after:auto}
+  .et.borde{outline:none}
+}
+#print-root{display:none}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="logo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 5v14M6 5v14M10 5v14M13 5v14M17 5v14M21 5v14"/></svg></div>
+    <div class="brand"><h1>Etiquetas de estantería</h1><p class="estado" id="estado">Cargando precios de Glop…</p></div>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="card">
+    <div class="card-head"><h2>1. Buscar o escanear producto</h2>
+      <div class="row">
+        <button class="btn sm" id="btn-mod">Artículos modificados</button>
+        <button class="btn sm" id="btn-cambios">Precios cambiados</button>
+        <button class="btn sm" id="btn-pegar">Pegar lista</button>
+      </div>
+    </div>
+    <input class="in" id="q" placeholder="Nombre o código de barras (puedes escanear aquí)" autocomplete="off" autofocus>
+    <div class="res" id="res"></div>
+    <p class="small muted" id="cambios-info" style="margin:10px 0 0"></p>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>2. Etiquetas a imprimir <span class="muted small" id="total"></span></h2>
+      <div class="row">
+        <button class="btn sm" id="btn-vaciar">Vaciar</button>
+        <button class="btn primary" id="btn-imprimir">Imprimir</button>
+      </div>
+    </div>
+    <div id="tras-imprimir" class="row" style="display:none;background:var(--primary-soft);border-radius:14px;padding:10px 12px;margin-bottom:10px">
+      <b style="flex:1;min-width:180px">¿Se imprimieron bien?</b>
+      <label class="chk small"><input type="checkbox" id="ti-seguir" checked> Seguir en la misma hoja la próxima vez</label>
+      <button class="btn sm primary" id="ti-si">Sí, vaciar lista</button>
+      <button class="btn sm" id="ti-no">No</button>
+    </div>
+    <div class="res lst" id="lista" style="max-height:440px"></div>
+    <div class="empty" id="lista-vacia">Añade productos desde el buscador.<br>Puedes cambiar el precio o el número de copias de cada uno.</div>
+  </section>
+
+  <section class="card full">
+    <div class="card-head"><h2>3. Formato de la hoja</h2>
+      <div class="row small muted">Zoom
+        <input type="range" id="zoom" min="0.3" max="1" step="0.05" value="0.6" style="width:120px">
+      </div>
+    </div>
+    <div class="grid-cfg">
+      <label>Modelo
+        <select id="c-modelo"></select>
+      </label>
+      <label>Columnas<input type="number" id="c-cols" min="1" max="10"></label>
+      <label>Filas<input type="number" id="c-filas" min="1" max="30"></label>
+      <label>Ancho etiqueta (mm)<input type="number" id="c-w" step="0.1"></label>
+      <label>Alto etiqueta (mm)<input type="number" id="c-h" step="0.1"></label>
+      <label>Margen superior (mm)<input type="number" id="c-mt" step="0.1"></label>
+      <label>Margen izquierdo (mm)<input type="number" id="c-ml" step="0.1"></label>
+      <label>Separación horiz. (mm)<input type="number" id="c-gx" step="0.1"></label>
+      <label>Separación vert. (mm)<input type="number" id="c-gy" step="0.1"></label>
+      <label>Empezar en la etiqueta nº<input type="number" id="c-inicio" min="1" value="1"></label>
+    </div>
+    <div class="row" style="margin:12px 0">
+      <label class="chk"><input type="checkbox" id="c-borde"> Marcar borde al imprimir (para papel normal)</label>
+      <label class="chk"><input type="checkbox" id="c-fecha"> Poner fecha pequeña</label>
+      <label class="chk"><input type="checkbox" id="c-num" checked> Números bajo el código</label>
+    </div>
+    <p class="small muted" style="margin:0 0 12px">Al imprimir: tamaño A4, <b>escala 100 %</b> (o «Tamaño real») y <b>márgenes: ninguno</b>. Si las etiquetas salen un poco desplazadas, corrige los márgenes de arriba; se guardan en este ordenador.</p>
+    <div class="preview-wrap"><div id="hojas"></div></div>
+  </section>
+</main>
+
+<div class="overlay" id="ov-pegar">
+  <div class="sheet-dlg">
+    <div class="card-head"><h2>Pegar lista</h2><button class="btn sm" data-cerrar>Cerrar</button></div>
+    <p class="small muted" style="margin-top:0">Pega códigos de barras (uno por línea) o las columnas copiadas del Excel <b>DESCRIPCION · PRECIO · CODIGO BARRAS</b>. Si el código está en Glop se usa su precio actual; si no, el del Excel.</p>
+    <textarea class="in" id="t-pegar"></textarea>
+    <div class="row" style="margin-top:10px"><button class="btn primary" id="btn-pegar-ok" style="flex:1">Añadir a la lista</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="ov-mod">
+  <div class="sheet-dlg" style="width:min(760px,100%)">
+    <div class="card-head"><h2>Artículos modificados</h2><button class="btn sm" data-cerrar>Cerrar</button></div>
+    <p class="small muted" style="margin-top:0">Cada día se apuntan solos los artículos <b>nuevos</b> y los que <b>cambian de precio</b> en Glop. Son los mismos archivos que hay en Drive › <b>ARTICULOS MODIFICADOS</b>.</p>
+    <div class="row" style="margin-bottom:10px">
+      <select class="in" id="mod-dia" style="flex:1;min-width:220px;width:auto"></select>
+      <button class="btn sm" id="mod-archivo">Abrir archivo de la carpeta…</button>
+      <input type="file" id="mod-f" accept=".xlsx" hidden>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <span class="small muted" id="mod-resumen" style="flex:1;min-width:180px"></span>
+      <button class="btn sm primary" id="mod-todos">Añadir todos</button>
+    </div>
+    <div class="res" id="mod-lista" style="max-height:50vh"></div>
+    <p class="small muted" id="mod-ayuda" style="margin:10px 0 0">La primera vez que abras un archivo, busca <b>Google Drive › Mi unidad › ARTICULOS MODIFICADOS</b>; después el navegador abrirá esa carpeta directamente.</p>
+  </div>
+</div>
+
+<div id="print-root"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* =================== Códigos de barras (sin librerías, funciona sin internet) =================== */
+const EAN_L = ['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
+const EAN_R = EAN_L.map(p => p.replace(/./g, c => c === '0' ? '1' : '0'));
+const EAN_G = EAN_R.map(p => p.split('').reverse().join(''));
+const EAN_PAR = ['LLLLLL','LLGLGG','LLGGLG','LLGGGL','LGLLGG','LGGLLG','LGGGLL','LGLGLG','LGLGGL','LGGLGL'];
+const C128 = ['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232'];
+const C128_STOP = '2331112';
+
+function digitoControl(s) { // EAN/UPC: pesos 3,1 desde la derecha
+  let t = 0;
+  for (let i = 0; i < s.length; i++) t += (+s[s.length - 1 - i]) * (i % 2 === 0 ? 3 : 1);
+  return (10 - t % 10) % 10;
+}
+function eanValido(s) { return /^\d+$/.test(s) && digitoControl(s.slice(0, -1)) === +s.slice(-1); }
+
+function ean13(s) {
+  const par = EAN_PAR[+s[0]];
+  let m = '101';
+  for (let i = 1; i <= 6; i++) m += (par[i - 1] === 'L' ? EAN_L : EAN_G)[+s[i]];
+  m += '01010';
+  for (let i = 7; i <= 12; i++) m += EAN_R[+s[i]];
+  return m + '101';
+}
+function ean8(s) {
+  let m = '101';
+  for (let i = 0; i < 4; i++) m += EAN_L[+s[i]];
+  m += '01010';
+  for (let i = 4; i < 8; i++) m += EAN_R[+s[i]];
+  return m + '101';
+}
+function code128(s) {
+  const vals = [];
+  if (/^\d+$/.test(s) && s.length >= 6) {                            // juego C: pares de dígitos (más compacto)
+    vals.push(105);
+    const par = s.length - (s.length % 2);
+    for (let i = 0; i < par; i += 2) vals.push(+s.substr(i, 2));
+    if (s.length % 2) vals.push(100, s.charCodeAt(s.length - 1) - 32);  // último dígito suelto en juego B
+  } else if (/^\d+$/.test(s) && s.length === 4) {
+    vals.push(105, +s.substr(0, 2), +s.substr(2, 2));
+  } else {                                                           // juego B: texto
+    vals.push(104);
+    for (const ch of s) {
+      const c = ch.charCodeAt(0);
+      if (c < 32 || c > 126) return null;
+      vals.push(c - 32);
+    }
+  }
+  let chk = vals[0];
+  for (let i = 1; i < vals.length; i++) chk += vals[i] * i;
+  vals.push(chk % 103);
+  let m = '';
+  const pinta = w => { let b = true; for (const n of w) { m += (b ? '1' : '0').repeat(+n); b = !b; } };
+  vals.forEach(v => pinta(C128[v]));
+  pinta(C128_STOP);
+  return m;
+}
+/* Devuelve {modulos, tipo, quiet} para el código; elige EAN si el dígito de control es correcto */
+function codificar(code) {
+  code = String(code || '').trim();
+  if (!code) return null;
+  if (/^\d{13}$/.test(code) && eanValido(code)) return { m: ean13(code), tipo: 'EAN-13', q: [11, 7] };
+  if (/^\d{12}$/.test(code) && eanValido(code)) return { m: ean13('0' + code), tipo: 'UPC-A', q: [9, 9] };
+  if (/^\d{8}$/.test(code) && eanValido(code)) return { m: ean8(code), tipo: 'EAN-8', q: [7, 7] };
+  const m = code128(code);
+  return m ? { m, tipo: 'Code 128', q: [10, 10] } : null;
+}
+function svgBarras(code, altoMm, moduloMm) {
+  const c = codificar(code);
+  if (!c) return null;
+  const total = c.q[0] + c.m.length + c.q[1];
+  let d = '', x = c.q[0], i = 0;
+  while (i < c.m.length) {
+    if (c.m[i] === '1') { let j = i; while (j < c.m.length && c.m[j] === '1') j++; d += `M${x + i} 0h${j - i}v1h-${j - i}z`; i = j; }
+    else i++;
+  }
+  const ancho = total * moduloMm;
+  return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} 1" preserveAspectRatio="none" style="width:${ancho.toFixed(2)}mm;height:${altoMm.toFixed(2)}mm" shape-rendering="crispEdges"><path d="${d}" fill="#000"/></svg>`, tipo: c.tipo, ancho, modulos: total };
+}
+
+/* =================== Utilidades =================== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = n => (n == null || isNaN(n)) ? '' : Number(n).toFixed(2).replace('.', ',');
+const num = v => { const n = parseFloat(String(v).replace(/\s|€/g, '').replace(',', '.')); return isNaN(n) ? null : n; };
+const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+const toast = msg => { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2600); };
+const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+/* =================== Datos de Glop =================== */
+let productos = [];          // {d, c, o, p, iva, fam, n}
+const porCodigo = new Map();
+async function cargar() {
+  try {
+    const r = await fetch('./pvp.json', { cache: 'no-cache' });
+    if (!r.ok) throw new Error(r.status);
+    usarDatos(await r.json(), r.headers.get('last-modified'));
+  } catch (e) {
+    $('#estado').innerHTML = 'No se pudo cargar pvp.json. <label style="text-decoration:underline;cursor:pointer">Elegir el archivo<input type="file" accept=".json" id="f-json" hidden></label>';
+    $('#f-json').onchange = async ev => { const f = ev.target.files[0]; if (f) usarDatos(JSON.parse(await f.text()), f.lastModified); };
+  }
+}
+function usarDatos(arr, fecha) {
+  productos = arr.map(r => ({ d: String(r[0] || '').trim(), c: String(r[1] || '').trim(), o: String(r[2] || '').trim(), p: +r[3], iva: r[4], fam: r[5] || '' }));
+  productos.forEach(x => { x.n = norm(x.d + ' ' + x.c + ' ' + x.o + ' ' + x.fam); });
+  porCodigo.clear();
+  productos.forEach(x => { [x.c, x.o].forEach(k => { if (k && !porCodigo.has(k)) porCodigo.set(k, x); }); });
+  let f = '';
+  if (fecha) { const dt = new Date(fecha); if (!isNaN(dt)) f = ' · actualizados ' + dt.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+  $('#estado').textContent = `${productos.length.toLocaleString('es-ES')} precios de Glop${f}`;
+  revisarCambios();
+  buscar();
+}
+
+/* =================== Buscador =================== */
+function buscar() {
+  const q = norm($('#q').value.trim());
+  const res = $('#res');
+  if (!q) { res.innerHTML = ''; return; }
+  const pal = q.split(/\s+/);
+  const exact = porCodigo.get($('#q').value.trim());
+  let hits = exact ? [exact] : [];
+  for (const x of productos) { if (hits.length >= 60) break; if (x !== exact && pal.every(w => x.n.includes(w))) hits.push(x); }
+  res.innerHTML = hits.length ? hits.map((x, i) => `<div class="it click" data-i="${productos.indexOf(x)}"><div class="d"><b>${esc(x.d)}</b><span>${esc(x.c || 'sin código')}${x.o ? ' · ' + esc(x.o) : ''} · ${esc(x.fam)}</span></div><div class="p">${fmt(x.p)} €</div><button class="add" tabindex="-1" aria-label="Añadir">+</button></div>`).join('')
+    : '<div class="empty">No hay nada con ese nombre o código.</div>';
+}
+$('#q').addEventListener('input', buscar);
+$('#q').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const v = $('#q').value.trim();
+  const x = porCodigo.get(v) || (() => { const f = $('#res .it[data-i]'); return f && $('#res').querySelectorAll('.it[data-i]').length === 1 ? productos[+f.dataset.i] : null; })();
+  if (x) { anadir(x); $('#q').value = ''; buscar(); }
+  else if (/^\d{4,}$/.test(v)) toast('Ese código no está en Glop');
+});
+$('#res').addEventListener('click', e => { const it = e.target.closest('.it[data-i]'); if (it) { anadir(productos[+it.dataset.i]); $('#q').focus(); } });
+
+/* =================== Lista de etiquetas =================== */
+let lista = lsGet('etq-lista', []);   // {d, c, p, q, glop}
+function anadir(x, extra) {
+  const c = x.c || x.o;
+  const ya = lista.find(l => l.d === x.d && l.c === c);
+  if (ya) ya.q++;
+  else lista.push({ d: x.d, c, p: x.p, q: 1, glop: x.p, ...extra });
+  guardarLista();
+  toast('Añadido: ' + x.d);
+}
+function guardarLista() { lsSet('etq-lista', lista); pintarLista(); pintarHojas(); }
+function pintarLista() {
+  const n = lista.reduce((a, l) => a + (l.q || 0), 0);
+  $('#total').textContent = lista.length ? `· ${n} etiqueta${n === 1 ? '' : 's'}` : '';
+  $('#lista-vacia').style.display = lista.length ? 'none' : '';
+  $('#lista').innerHTML = lista.map((l, i) => {
+    const bc = codificar(l.c);
+    const avis = !l.c ? '<span class="badge">sin código</span>' : (!bc ? '<span class="badge">código no válido</span>' : '');
+    const dist = l.glop != null && Math.abs(l.glop - l.p) > 0.001 ? `<span class="badge">Glop: ${fmt(l.glop)}</span>` : '';
+    return `<div class="it" data-i="${i}"><div class="d"><b>${esc(l.d)}</b><span>${esc(l.c)}${bc ? ' · ' + bc.tipo : ''}</span>${avis}${dist}</div>
+      <input class="pr" value="${fmt(l.p)}" aria-label="Precio"> €
+      <input class="qt" type="number" min="0" value="${l.q}" aria-label="Copias">
+      <button class="x" aria-label="Quitar">×</button></div>`;
+  }).join('');
+}
+$('#lista').addEventListener('change', e => {
+  const it = e.target.closest('.it'); if (!it) return;
+  const l = lista[+it.dataset.i];
+  if (e.target.classList.contains('pr')) { const v = num(e.target.value); if (v != null) l.p = v; }
+  if (e.target.classList.contains('qt')) l.q = Math.max(0, parseInt(e.target.value) || 0);
+  guardarLista();
+});
+$('#lista').addEventListener('click', e => {
+  if (!e.target.classList.contains('x')) return;
+  lista.splice(+e.target.closest('.it').dataset.i, 1); guardarLista();
+});
+$('#btn-vaciar').onclick = () => { if (!lista.length) return; lista = []; guardarLista(); };
+
+/* =================== Pegar lista (Excel o códigos) =================== */
+$('#btn-pegar').onclick = () => { $('#ov-pegar').classList.add('on'); $('#t-pegar').focus(); };
+document.querySelectorAll('[data-cerrar]').forEach(b => b.onclick = () => b.closest('.overlay').classList.remove('on'));
+$('#btn-pegar-ok').onclick = () => {
+  let ok = 0, nuevos = 0;
+  for (const linea of $('#t-pegar').value.split(/\r?\n/)) {
+    const cols = linea.split('\t').map(s => s.trim()).filter((s, i, a) => s || i < a.length - 1);
+    if (!cols.length || !cols.join('')) continue;
+    if (/^DESCRIPCION$/i.test(cols[0])) continue;
+    const codigo = cols.find(s => /^\d{4,14}$/.test(s)) || (cols.length === 1 ? cols[0] : '');
+    const g = codigo && porCodigo.get(codigo);
+    if (g) { anadir(g); ok++; continue; }
+    if (cols.length >= 2) {
+      const precio = num(cols[1]);
+      lista.push({ d: cols[0], c: codigo, p: precio ?? 0, q: 1, glop: null }); nuevos++;
+    }
+  }
+  guardarLista();
+  $('#ov-pegar').classList.remove('on'); $('#t-pegar').value = '';
+  toast(`${ok} con precio de Glop${nuevos ? `, ${nuevos} con el precio pegado` : ''}`);
+};
+
+/* =================== Precios cambiados desde la última impresión =================== */
+let impresos = lsGet('etq-impresos', {});   // "codigo|descripcion" -> precio impreso
+const clave = (c, d) => c + '|' + d;
+function cambiados() {
+  const out = [];
+  for (const x of productos) {
+    const k = clave(x.c || x.o, x.d);
+    if (k in impresos && Math.abs(impresos[k] - x.p) > 0.001) out.push({ x, antes: impresos[k] });
+  }
+  return out;
+}
+function revisarCambios() {
+  const n = Object.keys(impresos).length, ch = cambiados();
+  $('#cambios-info').textContent = !n ? 'Cuando imprimas, se recuerda el precio de cada etiqueta para avisarte si Glop lo cambia.'
+    : ch.length ? `⚠ ${ch.length} producto${ch.length === 1 ? ' ha' : 's han'} cambiado de precio desde que imprimiste su etiqueta.` : `Ningún precio ha cambiado desde la última impresión (${n} etiquetas recordadas).`;
+  $('#btn-cambios').textContent = ch.length ? `Precios cambiados (${ch.length})` : 'Precios cambiados';
+}
+$('#btn-cambios').onclick = () => {
+  const ch = cambiados();
+  if (!ch.length) { toast('No hay precios cambiados'); return; }
+  ch.forEach(({ x }) => { const c = x.c || x.o; if (!lista.some(l => l.c === c && l.d === x.d)) lista.push({ d: x.d, c, p: x.p, q: 1, glop: x.p }); });
+  guardarLista();
+  toast(`${ch.length} etiquetas añadidas con el precio nuevo`);
+};
+
+/* =================== Artículos modificados (lista diaria de nuevos y cambios de precio) =================== */
+// modificados.json lo genera actualizar-barras cada hora; el mismo contenido va a Drive › ARTICULOS MODIFICADOS en Excel.
+let dias = [];               // {fecha, nombre, articulos: [{m, d, c, antes, ahora, fam}]}
+const hoyIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const nombreDia = f => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) return f;
+  const s = new Date(f + 'T12:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+  return (f === hoyIso() ? 'Hoy, ' : '') + s;
+};
+const precioTxt = v => typeof v === 'number' ? fmt(v) : String(v ?? '').replace(/\./g, ',');
+async function cargarModificados() {
+  try {
+    const r = await fetch('./modificados.json', { cache: 'no-cache' });
+    if (!r.ok) throw new Error(r.status);
+    dias = (await r.json()).map(x => ({ fecha: x.fecha, nombre: 'ARTICULOS MODIFICADOS ' + x.fecha,
+      articulos: x.articulos.map(a => ({ m: a[0], d: String(a[1] || '').trim(), c: String(a[2] || '').trim(), antes: a[3], ahora: a[4], fam: a[5] || '' })) }));
+  } catch { dias = []; }
+  const hoy = dias.find(x => x.fecha === hoyIso());
+  $('#btn-mod').textContent = hoy ? `Artículos modificados (${hoy.articulos.length} hoy)` : 'Artículos modificados';
+}
+function pintarDias(sel) {
+  $('#mod-dia').innerHTML = dias.length ? dias.map((x, i) => `<option value="${i}">${esc(nombreDia(x.fecha))} · ${x.articulos.length} artículo${x.articulos.length === 1 ? '' : 's'}</option>`).join('')
+    : '<option value="">Todavía no hay listas en la web: abre un archivo de la carpeta</option>';
+  $('#mod-dia').value = dias.length ? String(sel || 0) : '';
+  pintarDia();
+}
+const diaActual = () => dias[+$('#mod-dia').value] || null;
+function enGlop(a) { return productos.find(x => x.d === a.d && (x.c || x.o) === a.c) || (a.c && porCodigo.get(a.c)) || null; }
+function pintarDia() {
+  const dia = diaActual();
+  $('#mod-todos').disabled = !dia;
+  if (!dia) { $('#mod-lista').innerHTML = ''; $('#mod-resumen').textContent = ''; return; }
+  const n = dia.articulos.filter(a => a.m === 'NUEVO').length;
+  $('#mod-resumen').textContent = `${dia.nombre}: ${n} nuevo${n === 1 ? '' : 's'} y ${dia.articulos.length - n} con precio cambiado`;
+  $('#mod-lista').innerHTML = dia.articulos.map((a, i) => {
+    const g = enGlop(a);
+    const ahora = g ? g.p : a.ahora;
+    const otro = g && a.ahora != null && Math.abs(g.p - a.ahora) > 0.001 ? `<span class="badge">ahora en Glop: ${fmt(g.p)}</span>` : '';
+    const cls = a.m === 'NUEVO' ? ' nuevo' : a.m === 'BAJA' ? ' baja' : '';
+    return `<div class="it" data-i="${i}"><div class="d"><b>${esc(a.d)}</b><span>${esc(a.c || 'sin código')} · ${esc(a.fam)}</span><span class="badge${cls}">${esc(a.m)}</span>${otro}</div>
+      <div class="p">${a.antes != null && a.antes !== '' ? `<small>${esc(precioTxt(a.antes))}</small>` : ''}${fmt(ahora)} €</div><button class="add" aria-label="Añadir">+</button></div>`;
+  }).join('') || '<div class="empty">Este archivo no tiene artículos.</div>';
+}
+function anadirModificado(a) {
+  const g = enGlop(a);
+  if (g) anadir(g); else anadir({ d: a.d, c: a.c, o: '', p: num(a.ahora) ?? 0 }, { glop: null });
+}
+$('#btn-mod').onclick = async () => { $('#ov-mod').classList.add('on'); await cargarModificados(); pintarDias(); };
+$('#mod-dia').onchange = pintarDia;
+$('#mod-lista').addEventListener('click', e => {
+  if (!e.target.classList.contains('add')) return;
+  anadirModificado(diaActual().articulos[+e.target.closest('.it').dataset.i]);
+});
+$('#mod-todos').onclick = () => {
+  const dia = diaActual(); if (!dia) return;
+  let n = 0;
+  for (const a of dia.articulos) {
+    const g = enGlop(a), d = g ? g.d : a.d, c = g ? (g.c || g.o) : a.c;
+    if (lista.some(l => l.d === d && l.c === c)) continue;
+    anadirModificado(a); n++;
+  }
+  $('#ov-mod').classList.remove('on');
+  toast(n ? `${n} etiquetas añadidas de ${dia.nombre}` : 'Ya estaban todas en la lista');
+};
+
+// Abrir un Excel de la carpeta de Drive. El navegador recuerda la carpeta (id) y la abre directamente las siguientes veces.
+function cargarScript(src) {
+  return new Promise((ok, mal) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => mal(new Error('No se pudo cargar el lector de Excel (¿sin internet?)')); document.head.appendChild(s); });
+}
+async function leerExcel(file) {
+  if (!window.XLSX) await cargarScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+  const wb = XLSX.read(await file.arrayBuffer());
+  const filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
+  const ini = filas.findIndex(f => f.some(v => norm(v).trim() === 'DESCRIPCION'));
+  if (ini < 0) throw new Error('El archivo no tiene la columna DESCRIPCION');
+  const cab = filas[ini].map(v => norm(v).trim());
+  const col = (...n) => cab.findIndex(v => n.includes(v));
+  const iM = col('MOTIVO'), iD = col('DESCRIPCION'), iC = col('CODIGO BARRAS', 'CODIGO'), iA = col('PRECIO ANTES'), iN = col('PRECIO NUEVO', 'PRECIO', 'PVP'), iF = col('FAMILIA');
+  const val = (f, i) => i < 0 ? '' : f[i];
+  const articulos = filas.slice(ini + 1).filter(f => String(val(f, iD)).trim()).map(f => ({
+    m: String(val(f, iM) || '').trim(), d: String(val(f, iD)).trim(), c: String(val(f, iC)).trim(),
+    antes: val(f, iA) === '' ? null : val(f, iA), ahora: num(val(f, iN)), fam: String(val(f, iF)).trim()
+  }));
+  const fecha = (file.name.match(/\d{4}-\d{2}-\d{2}/) || [file.name.replace(/\.xlsx$/i, '')])[0];
+  dias = dias.filter(x => !x.archivo);
+  dias.unshift({ fecha, nombre: file.name.replace(/\.xlsx$/i, ''), archivo: true, articulos });
+  pintarDias(0);
+}
+$('#mod-archivo').onclick = async () => {
+  if (!window.showOpenFilePicker) { $('#mod-f').click(); return; }
+  try {
+    const [h] = await window.showOpenFilePicker({ id: 'articulos-modificados', types: [{ description: 'Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }] });
+    await leerExcel(await h.getFile());
+  } catch (e) { if (e.name !== 'AbortError') toast(e.message); }
+};
+$('#mod-f').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (f) try { await leerExcel(f); } catch (err) { toast(err.message); } };
+
+/* =================== Formato de hoja =================== */
+const MODELOS = {
+  'a4-3x8':  { n: 'A4 · 3×8 (70×37 mm)',     cols: 3, filas: 8,  w: 70,    h: 37,   mt: 0.5,  ml: 0,    gx: 0, gy: 0 },
+  'a4-3x7':  { n: 'A4 · 3×7 (70×42,4 mm)',   cols: 3, filas: 7,  w: 70,    h: 42.4, mt: 0,    ml: 0,    gx: 0, gy: 0 },
+  'a4-2x7':  { n: 'A4 · 2×7 (105×42,4 mm)',  cols: 2, filas: 7,  w: 105,   h: 42.4, mt: 0,    ml: 0,    gx: 0, gy: 0 },
+  'a4-3x10': { n: 'A4 · 3×10 (70×29,7 mm)',  cols: 3, filas: 10, w: 70,    h: 29.7, mt: 0,    ml: 0,    gx: 0, gy: 0 },
+  'a4-4x10': { n: 'A4 · 4×10 (52,5×29,7 mm)',cols: 4, filas: 10, w: 52.5,  h: 29.7, mt: 0,    ml: 0,    gx: 0, gy: 0 },
+  'a4-2x5':  { n: 'A4 · 2×5 (105×57 mm)',    cols: 2, filas: 5,  w: 105,   h: 57,   mt: 6,    ml: 0,    gx: 0, gy: 0 },
+  'tiras':   { n: 'A4 · tiras 190×39 mm (papel normal)', cols: 1, filas: 7, w: 190, h: 39, mt: 10, ml: 10, gx: 0, gy: 1 },
+  'otro':    { n: 'Personalizado' }
+};
+const CAMPOS = ['cols', 'filas', 'w', 'h', 'mt', 'ml', 'gx', 'gy'];
+let cfg = Object.assign({ modelo: 'a4-3x8', ...MODELOS['a4-3x8'], inicio: 1, borde: false, fecha: false, num: true, zoom: 0.6 }, lsGet('etq-cfg', {}));
+$('#c-modelo').innerHTML = Object.entries(MODELOS).map(([k, m]) => `<option value="${k}">${m.n}</option>`).join('');
+function cfgAInputs() {
+  $('#c-modelo').value = cfg.modelo;
+  CAMPOS.forEach(k => $('#c-' + k).value = cfg[k]);
+  $('#c-inicio').value = cfg.inicio; $('#c-borde').checked = cfg.borde; $('#c-fecha').checked = cfg.fecha; $('#c-num').checked = cfg.num;
+  $('#zoom').value = cfg.zoom; $('#hojas').style.setProperty('--z', cfg.zoom);
+}
+$('#c-modelo').onchange = () => { cfg.modelo = $('#c-modelo').value; if (cfg.modelo !== 'otro') Object.assign(cfg, MODELOS[cfg.modelo]); delete cfg.n; cfgAInputs(); guardarCfg(); };
+CAMPOS.forEach(k => $('#c-' + k).addEventListener('change', () => { cfg[k] = num($('#c-' + k).value) ?? 0; cfg.modelo = 'otro'; $('#c-modelo').value = 'otro'; guardarCfg(); }));
+$('#c-inicio').onchange = () => { cfg.inicio = Math.max(1, parseInt($('#c-inicio').value) || 1); guardarCfg(); };
+['borde', 'fecha', 'num'].forEach(k => $('#c-' + k).onchange = () => { cfg[k] = $('#c-' + k).checked; guardarCfg(); });
+$('#zoom').oninput = () => { cfg.zoom = +$('#zoom').value; $('#hojas').style.setProperty('--z', cfg.zoom); lsSet('etq-cfg', cfg); };
+function guardarCfg() { lsSet('etq-cfg', cfg); pintarHojas(); }
+
+/* =================== Dibujar etiquetas =================== */
+function htmlEtiqueta(l, x, y) {
+  const W = cfg.w, H = cfg.h;
+  const pad = Math.max(1.5, Math.min(W, H) * 0.06);
+  const descFs = Math.min(H * 0.105, W * 0.06, 4.6);
+  const altoBarras = Math.max(6, H * 0.36);
+  const numFs = Math.min(2.6, Math.max(1.8, H * 0.065));
+  let bc = '';
+  const c = l.c && codificar(l.c);
+  if (c) {
+    // ancho de módulo: entre 0,26 y 0,40 mm, que quepa en ~58 % del ancho útil
+    const total = c.q[0] + c.m.length + c.q[1];
+    const mod = Math.max(0.19, Math.min(0.4, (W - 2 * pad) * 0.6 / total));
+    const s = svgBarras(l.c, altoBarras, mod);
+    bc = `<div class="bc">${s.svg}${cfg.num ? `<div class="num">${esc(l.c)}</div>` : ''}</div>`;
+  } else if (l.c) bc = `<div class="bc sinbc">${esc(l.c)}</div>`;
+  const precioFs = Math.min(H * 0.34, W * 0.13);
+  const [ent, dec] = fmt(l.p).split(',');
+  const fecha = cfg.fecha ? `<div class="fecha">${new Date().toLocaleDateString('es-ES')}</div>` : '';
+  return `<div class="et${cfg.borde ? ' borde' : ''}" style="left:${x}mm;top:${y}mm;width:${W}mm;height:${H}mm;--pad:${pad.toFixed(2)}mm;--numfs:${numFs.toFixed(2)}mm">
+    ${fecha}<div class="desc" style="font-size:${descFs.toFixed(2)}mm">${esc(l.d)}</div>
+    <div class="abajo">${bc}<div class="precio" style="font-size:${precioFs.toFixed(2)}mm">${ent},${dec}<small>€</small></div></div></div>`;
+}
+function construirHojas() {
+  const porHoja = Math.max(1, cfg.cols * cfg.filas);
+  const items = [];
+  for (const l of lista) for (let k = 0; k < (l.q || 0); k++) items.push(l);
+  const inicio = Math.min(Math.max(1, cfg.inicio), porHoja) - 1;
+  const huecos = inicio + items.length;
+  const nHojas = Math.max(1, Math.ceil(huecos / porHoja));
+  let html = '';
+  for (let h = 0; h < nHojas; h++) {
+    let et = '';
+    for (let s = 0; s < porHoja; s++) {
+      const idx = h * porHoja + s - inicio;
+      if (idx < 0 || idx >= items.length) continue;
+      const col = s % cfg.cols, fila = Math.floor(s / cfg.cols);
+      et += htmlEtiqueta(items[idx], (cfg.ml + col * (cfg.w + cfg.gx)).toFixed(2), (cfg.mt + fila * (cfg.h + cfg.gy)).toFixed(2));
+    }
+    html += `<div class="hoja">${et}</div>`;
+  }
+  return { html, n: items.length, nHojas };
+}
+function ajustarTextos(raiz) {
+  // reduce el precio si no cabe al lado del código
+  raiz.querySelectorAll('.precio').forEach(p => {
+    let fs = parseFloat(p.style.fontSize), i = 0;
+    while (p.scrollWidth > p.clientWidth + 0.5 && i++ < 30) { fs *= 0.93; p.style.fontSize = fs.toFixed(2) + 'mm'; }
+  });
+}
+function pintarHojas() {
+  const { html } = construirHojas();
+  const cont = $('#hojas');
+  cont.innerHTML = html;
+  const z = cont.style.getPropertyValue('--z');
+  cont.style.setProperty('--z', 1);
+  ajustarTextos(cont);
+  cont.style.setProperty('--z', z || cfg.zoom);
+}
+
+/* =================== Imprimir =================== */
+$('#btn-imprimir').onclick = () => {
+  const { html, n } = construirHojas();
+  if (!n) { toast('La lista está vacía'); return; }
+  const raiz = $('#print-root');
+  raiz.innerHTML = html;
+  raiz.style.display = 'block'; raiz.style.position = 'absolute'; raiz.style.left = '-10000px';
+  ajustarTextos(raiz);
+  raiz.removeAttribute('style');
+  const despues = () => {
+    window.removeEventListener('afterprint', despues);
+    raiz.innerHTML = '';
+    $('#tras-imprimir').style.display = 'flex';
+    $('#tras-imprimir').dataset.n = n;
+  };
+  window.addEventListener('afterprint', despues);
+  window.print();
+};
+$('#ti-si').onclick = () => {
+  const n = +$('#tras-imprimir').dataset.n;
+  lista.forEach(l => { if (l.q > 0) impresos[clave(l.c, l.d)] = l.p; });
+  lsSet('etq-impresos', impresos);
+  revisarCambios();
+  // en hojas de etiquetas adhesivas: la próxima vez se sigue donde quedó la última
+  const porHoja = cfg.cols * cfg.filas;
+  const usadas = (Math.min(cfg.inicio, porHoja) - 1 + n) % porHoja;
+  if ($('#ti-seguir').checked && usadas) { cfg.inicio = usadas + 1; toast(`La próxima impresión empezará en la etiqueta ${usadas + 1} de la hoja`); }
+  else cfg.inicio = 1;
+  lista = [];
+  cfgAInputs(); lsSet('etq-cfg', cfg); guardarLista();
+  $('#tras-imprimir').style.display = 'none';
+};
+$('#ti-no').onclick = () => { $('#tras-imprimir').style.display = 'none'; };
+
+/* =================== Inicio =================== */
+cfgAInputs();
+pintarLista();
+pintarHojas();
+cargar();
+cargarModificados();
+</script>
+</body>
+</html>
