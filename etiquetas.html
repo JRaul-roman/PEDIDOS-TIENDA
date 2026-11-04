@@ -543,6 +543,8 @@ $('#mod-f').onchange = async e => { const f = e.target.files[0]; e.target.value 
 
 /* =================== Formato de hoja =================== */
 const MODELOS = {
+  // Hoja de siempre de la tienda: la misma configuración que tenía ETIQUETAS.lpa en Labeljoy (A4, 3×8)
+  'tienda-nueva': { n: 'TIENDA NUEVA · 3×8 (60×30,25 mm)', cols: 3, filas: 8, w: 60, h: 30.25, mt: 13.5, ml: 10.5, gx: 4.5, gy: 4 },
   'a4-3x8':  { n: 'A4 · 3×8 (70×37 mm)',     cols: 3, filas: 8,  w: 70,    h: 37,   mt: 0.5,  ml: 0,    gx: 0, gy: 0 },
   'a4-3x7':  { n: 'A4 · 3×7 (70×42,4 mm)',   cols: 3, filas: 7,  w: 70,    h: 42.4, mt: 0,    ml: 0,    gx: 0, gy: 0 },
   'a4-2x7':  { n: 'A4 · 2×7 (105×42,4 mm)',  cols: 2, filas: 7,  w: 105,   h: 42.4, mt: 0,    ml: 0,    gx: 0, gy: 0 },
@@ -553,7 +555,9 @@ const MODELOS = {
   'otro':    { n: 'Personalizado' }
 };
 const CAMPOS = ['cols', 'filas', 'w', 'h', 'mt', 'ml', 'gx', 'gy'];
-let cfg = Object.assign({ modelo: 'a4-3x8', ...MODELOS['a4-3x8'], inicio: 1, borde: false, fecha: false, num: true, zoom: 0.6 }, lsGet('etq-cfg', {}));
+let cfg = Object.assign({ modelo: 'tienda-nueva', ...MODELOS['tienda-nueva'], inicio: 1, borde: false, fecha: false, num: true, zoom: 0.6 }, lsGet('etq-cfg', {}));
+// Una vez por navegador: los que ya usaban la página pasan a la hoja TIENDA NUEVA
+if (!lsGet('etq-cfg-tienda-nueva', false)) { Object.assign(cfg, { modelo: 'tienda-nueva', ...MODELOS['tienda-nueva'], inicio: 1 }); delete cfg.n; lsSet('etq-cfg', cfg); lsSet('etq-cfg-tienda-nueva', true); }
 $('#c-modelo').innerHTML = Object.entries(MODELOS).map(([k, m]) => `<option value="${k}">${m.n}</option>`).join('');
 function cfgAInputs() {
   $('#c-modelo').value = cfg.modelo;
