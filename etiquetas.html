@@ -109,6 +109,7 @@ textarea.in{min-height:180px;font:13px/1.4 ui-monospace,Consolas,monospace}
 .et .desc{font-weight:700;line-height:1.12;text-transform:uppercase;text-align:center;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
 .et .bc{display:flex;flex-direction:column;align-items:center;flex:0 0 auto;align-self:flex-start;margin-top:.8mm}
 .et .bc svg{display:block}
+.et .bc img.barras{display:block;image-rendering:crisp-edges;image-rendering:pixelated}
 .et .bc .num{font-size:var(--numfs);letter-spacing:.06em;line-height:1;margin-top:.5mm;font-variant-numeric:tabular-nums}
 .et .precio{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;font-weight:800;line-height:.9;white-space:nowrap;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .et .precio sup{font-size:.45em;align-self:flex-start;line-height:1.15;letter-spacing:0;margin-left:.03em;margin-top:.12em}
@@ -309,6 +310,28 @@ function codificar(code) {
   if (/^\d{8}$/.test(code) && eanValido(code)) return { m: ean8(code), tipo: 'EAN-8', q: [7, 7] };
   const m = code128(code);
   return m ? { m, tipo: 'Code 128', q: [10, 10] } : null;
+}
+/* El código para imprimir, como imagen en blanco y negro puro (10 píxeles por módulo = 720 ppp con módulos de 1/72"),
+   sin suavizar. Dibujado como vector, el navegador lo suavizaba al imprimir: las barras salían grises y el lector
+   no las leía, aunque en pantalla se vieran bien. */
+const cacheBarras = new Map();
+function imgBarras(code, altoMm, moduloMm) {
+  const c = codificar(code);
+  if (!c) return null;
+  const total = c.q[0] + c.m.length + c.q[1], k = 10;
+  let url = cacheBarras.get(code);
+  if (!url) {
+    const cv = document.createElement('canvas');
+    cv.width = total * k; cv.height = 8;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+    g.fillStyle = '#000';
+    for (let i = 0; i < c.m.length; i++) if (c.m[i] === '1') g.fillRect((c.q[0] + i) * k, 0, k, cv.height);
+    url = cv.toDataURL('image/png');
+    cacheBarras.set(code, url);
+  }
+  const ancho = total * moduloMm;
+  return { html: `<img class="barras" src="${url}" alt="" style="width:${ancho.toFixed(3)}mm;height:${altoMm.toFixed(3)}mm">`, tipo: c.tipo, ancho, modulos: total };
 }
 function svgBarras(code, altoMm, moduloMm) {
   const c = codificar(code);
@@ -665,8 +688,8 @@ function htmlEtiqueta(l, x, y) {
     // El código empieza en un múltiplo del módulo desde el borde del papel, para que cada barra caiga en puntos enteros.
     const borde = cfg.borde ? 0.25 : 0;
     const izq = Math.round((+x + (W - total * mod) / 2) / mod) * mod - +x;
-    const s = svgBarras(l.c, altoBarras, mod);
-    bc = `<div class="bc" style="margin-left:${(izq - borde - pad).toFixed(3)}mm">${s.svg}${cfg.num ? `<div class="num">${esc(l.c)}</div>` : ''}</div>`;
+    const s = imgBarras(l.c, altoBarras, mod);
+    bc = `<div class="bc" style="margin-left:${(izq - borde - pad).toFixed(3)}mm">${s.html}${cfg.num ? `<div class="num">${esc(l.c)}</div>` : ''}</div>`;
   } else if (l.c) bc = `<div class="bc sinbc" style="align-self:center">${esc(l.c)}</div>`;
   const precioFs = Math.min(H * 0.56, W * 0.3);
   const [ent, dec] = fmt(l.p).split(',');
@@ -715,13 +738,15 @@ function pintarHojas() {
 }
 
 /* =================== Imprimir =================== */
-$('#btn-imprimir').onclick = () => {
+$('#btn-imprimir').onclick = async () => {
   const { html, n } = construirHojas();
   if (!n) { toast('La lista está vacía'); return; }
   const raiz = $('#print-root');
   raiz.innerHTML = html;
   raiz.style.display = 'block'; raiz.style.position = 'absolute'; raiz.style.left = '-10000px';
   ajustarTextos(raiz);
+  // que las imágenes de los códigos estén listas antes de imprimir, o saldrían en blanco
+  await Promise.all([...raiz.querySelectorAll('img')].map(i => i.decode().catch(() => {})));
   raiz.removeAttribute('style');
   const despues = () => {
     window.removeEventListener('afterprint', despues);
