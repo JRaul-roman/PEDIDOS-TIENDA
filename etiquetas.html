@@ -193,7 +193,7 @@ textarea.in{min-height:180px;font:13px/1.4 ui-monospace,Consolas,monospace}
     <div class="row" style="margin:12px 0">
       <label class="chk"><input type="checkbox" id="c-borde"> Borde fino alrededor del cartel</label>
       <label class="chk"><input type="checkbox" id="c-fecha"> Poner fecha pequeña</label>
-      <label class="chk"><input type="checkbox" id="c-num" checked> Números bajo el código</label>
+      <label class="chk"><input type="checkbox" id="c-num"> Números bajo el código</label>
     </div>
     <p class="small muted" style="margin:0 0 12px">Al imprimir: tamaño A4, <b>escala 100 %</b> (o «Tamaño real») y <b>márgenes: ninguno</b>. Si las etiquetas salen un poco desplazadas, corrige los márgenes de arriba; se guardan en este ordenador.</p>
     <div class="preview-wrap"><div id="hojas"></div></div>
@@ -302,7 +302,8 @@ function code128(s) {
 function codificar(code) {
   code = String(code || '').trim();
   if (!code) return null;
-  if (/^\d{13}$/.test(code) && eanValido(code)) return { m: ean13(code), tipo: 'EAN-13', q: [11, 7] };
+  // márgenes en blanco algo menores que el estándar: el propio cartel ya deja blanco alrededor
+  if (/^\d{13}$/.test(code) && eanValido(code)) return { m: ean13(code), tipo: 'EAN-13', q: [8, 6] };
   if (/^\d{12}$/.test(code) && eanValido(code)) return { m: ean13('0' + code), tipo: 'UPC-A', q: [9, 9] };
   if (/^\d{8}$/.test(code) && eanValido(code)) return { m: ean8(code), tipo: 'EAN-8', q: [7, 7] };
   const m = code128(code);
@@ -314,7 +315,8 @@ function svgBarras(code, altoMm, moduloMm) {
   const total = c.q[0] + c.m.length + c.q[1];
   let d = '', x = c.q[0], i = 0;
   while (i < c.m.length) {
-    if (c.m[i] === '1') { let j = i; while (j < c.m.length && c.m[j] === '1') j++; d += `M${x + i} 0h${j - i}v1h-${j - i}z`; i = j; }
+    // cada barra un 12 % de módulo más fina: la tinta se expande al imprimir y así los huecos no se cierran
+    if (c.m[i] === '1') { let j = i; while (j < c.m.length && c.m[j] === '1') j++; const w = (j - i - 0.12).toFixed(2); d += `M${(x + i + 0.06).toFixed(2)} 0h${w}v1h-${w}z`; i = j; }
     else i++;
   }
   const ancho = total * moduloMm;
@@ -623,9 +625,11 @@ const MODELOS = {
   'otro':    { n: 'Personalizado' }
 };
 const CAMPOS = ['cols', 'filas', 'w', 'h', 'mt', 'ml', 'gx', 'gy'];
-let cfg = Object.assign({ modelo: 'tienda-nueva', ...MODELOS['tienda-nueva'], inicio: 1, borde: true, fecha: false, num: true, zoom: 0.6 }, lsGet('etq-cfg', {}));
+let cfg = Object.assign({ modelo: 'tienda-nueva', ...MODELOS['tienda-nueva'], inicio: 1, borde: true, fecha: false, num: false, zoom: 0.6 }, lsGet('etq-cfg', {}));
 // Una vez por navegador: los que ya usaban la página pasan a la hoja TIENDA NUEVA, con borde y números
-if (!lsGet('etq-cfg-tienda-nueva', false)) { Object.assign(cfg, { modelo: 'tienda-nueva', ...MODELOS['tienda-nueva'], inicio: 1, borde: true, num: true }); delete cfg.n; lsSet('etq-cfg', cfg); lsSet('etq-cfg-tienda-nueva', true); }
+if (!lsGet('etq-cfg-tienda-nueva', false)) { Object.assign(cfg, { modelo: 'tienda-nueva', ...MODELOS['tienda-nueva'], inicio: 1, borde: true }); delete cfg.n; lsSet('etq-cfg', cfg); lsSet('etq-cfg-tienda-nueva', true); }
+// Una vez: sin números bajo el código, como el cartel de Labeljoy (se pueden volver a poner con la casilla)
+if (!lsGet('etq-cfg-sin-numeros', false)) { cfg.num = false; lsSet('etq-cfg', cfg); lsSet('etq-cfg-sin-numeros', true); }
 $('#c-modelo').innerHTML = Object.entries(MODELOS).map(([k, m]) => `<option value="${k}">${m.n}</option>`).join('');
 function cfgAInputs() {
   $('#c-modelo').value = cfg.modelo;
@@ -645,15 +649,16 @@ function htmlEtiqueta(l, x, y) {
   const W = cfg.w, H = cfg.h;
   const pad = Math.max(1.5, Math.min(W, H) * 0.06);
   const descFs = Math.min(H * 0.105, W * 0.06, 4.6);
-  const altoBarras = Math.max(6, H * 0.28);
+  const altoBarras = Math.max(6, H * 0.22);
   const numFs = Math.min(2.6, Math.max(1.8, H * 0.065));
   let bc = '';
   const c = l.c && codificar(l.c);
   if (c) {
     // ancho de módulo: entre 0,26 y 0,40 mm, que quepa en ~58 % del ancho útil
     const total = c.q[0] + c.m.length + c.q[1];
-    // ~42 % del ancho, sin bajar de 0,22 mm por barra para que el lector lo siga leyendo
-    const mod = Math.max(0.22, Math.min(0.4, (W - 2 * pad) * 0.42 / total));
+    // Barras de 0,28 mm (por encima del mínimo EAN de 0,264): con 0,22 mm la impresora de tinta las emborronaba
+    // y el lector no las leía
+    const mod = Math.max(0.28, Math.min(0.4, (W - 2 * pad) * 0.45 / total));
     const s = svgBarras(l.c, altoBarras, mod);
     bc = `<div class="bc">${s.svg}${cfg.num ? `<div class="num">${esc(l.c)}</div>` : ''}</div>`;
   } else if (l.c) bc = `<div class="bc sinbc">${esc(l.c)}</div>`;
