@@ -192,13 +192,14 @@ textarea.in{min-height:180px;font:13px/1.4 ui-monospace,Consolas,monospace}
       <label>Separación horiz. (mm)<input type="number" id="c-gx" step="0.1"></label>
       <label>Separación vert. (mm)<input type="number" id="c-gy" step="0.1"></label>
       <label>Empezar en la etiqueta nº<input type="number" id="c-inicio" min="1" value="1"></label>
+      <label title="La impresora ensancha las barras al imprimir; esto las adelgaza para que salgan a su medida. 0,18 va bien en la Epson de la tienda.">Adelgazar barras (mm)<input type="number" id="c-reduc" min="0" max="0.2" step="0.01"></label>
     </div>
     <div class="row" style="margin:12px 0">
       <label class="chk"><input type="checkbox" id="c-borde"> Borde fino alrededor del cartel</label>
       <label class="chk"><input type="checkbox" id="c-fecha"> Poner fecha pequeña</label>
       <label class="chk"><input type="checkbox" id="c-num"> Números bajo el código</label>
     </div>
-    <p class="small muted" style="margin:0 0 12px">Al imprimir: tamaño A4, <b>escala 100 %</b> (o «Tamaño real») y <b>márgenes: ninguno</b>. Si las etiquetas salen un poco desplazadas, corrige los márgenes de arriba; se guardan en este ordenador.<br>Si el código de barras sale gris o borroso: en «Más opciones» deja <b>sin marcar «Imprimir como imagen»</b>, y en «Imprimir con el cuadro de diálogo del sistema» › Preferencias pon <b>calidad Alta</b> (en calidad rápida/borrador la Epson echa menos tinta y las barras salen grises).</p>
+    <p class="small muted" style="margin:0 0 12px">Al imprimir: tamaño A4, <b>escala 100 %</b> (o «Tamaño real») y <b>márgenes: ninguno</b>. Si las etiquetas salen un poco desplazadas, corrige los márgenes de arriba; se guardan en este ordenador.<br>En «Más opciones» deja <b>sin marcar «Imprimir como imagen»</b>. Si el lector no lee el código: con las barras muy gordas y los huecos blancos casi cerrados, sube «Adelgazar barras»; si las barras salen muy finas o cortadas, bájalo.</p>
     <div class="preview-wrap"><div id="hojas"></div></div>
   </section>
 </main>
@@ -316,16 +317,19 @@ function codificar(code) {
 /* El código para imprimir va en VECTOR (rectángulos negros), como lo manda Labeljoy: la impresora pinta cada barra
    exacta a su resolución. Como imagen (PNG), el navegador y el driver la reescalaban al imprimir y los bordes de las
    barras salían borrosos/grises, y el lector no las leía (comprobado en el PDF que genera el navegador, 2026-11-05). */
-function svgBarras(code, altoMm, moduloMm) {
+/* Adelgazar barras (reducción de barra): la Epson ensancha cada barra impresa. Medido en la foto del 2026-11-05: cada
+   barra salía ~0,19 mm más gruesa (72 % negro en vez de ~50 %) y los huecos finos casi desaparecían; Labeljoy, en la
+   misma impresora, salía exacto. Se quita ese grosor de cada barra (la mitad por cada lado) para que salga a su medida. */
+function svgBarras(code, altoMm, moduloMm, reducMm = 0) {
   const c = codificar(code);
   if (!c) return null;
   const total = c.q[0] + c.m.length + c.q[1];
-  // Barras enteras en módulos y escala igual en los dos ejes (sin estirar el dibujo): así la impresora las saca
-  // negras y nítidas. Con barras más finas que un módulo salían grises y el lector no las leía.
   const alto = Math.round(altoMm / moduloMm);
+  const r = Math.min(0.6, Math.max(0, reducMm / moduloMm));   // en módulos
+  const n = v => +v.toFixed(4);
   let d = '', x = c.q[0], i = 0;
   while (i < c.m.length) {
-    if (c.m[i] === '1') { let j = i; while (j < c.m.length && c.m[j] === '1') j++; d += `M${x + i} 0h${j - i}v${alto}h-${j - i}z`; i = j; }
+    if (c.m[i] === '1') { let j = i; while (j < c.m.length && c.m[j] === '1') j++; const w = n(j - i - r); d += `M${n(x + i + r / 2)} 0h${w}v${alto}h-${w}z`; i = j; }
     else i++;
   }
   const ancho = total * moduloMm;
@@ -634,7 +638,7 @@ const MODELOS = {
   'otro':    { n: 'Personalizado' }
 };
 const CAMPOS = ['cols', 'filas', 'w', 'h', 'mt', 'ml', 'gx', 'gy'];
-let cfg = Object.assign({ modelo: 'tienda-nueva', ...MODELOS['tienda-nueva'], inicio: 1, borde: true, fecha: false, num: false, zoom: 0.6 }, lsGet('etq-cfg', {}));
+let cfg = Object.assign({ modelo: 'tienda-nueva', ...MODELOS['tienda-nueva'], inicio: 1, borde: true, fecha: false, num: false, zoom: 0.6, reduc: 0.18 }, lsGet('etq-cfg', {}));
 // Una vez por navegador: los que ya usaban la página pasan a la hoja TIENDA NUEVA, con borde y números
 if (!lsGet('etq-cfg-tienda-nueva', false)) { Object.assign(cfg, { modelo: 'tienda-nueva', ...MODELOS['tienda-nueva'], inicio: 1, borde: true }); delete cfg.n; lsSet('etq-cfg', cfg); lsSet('etq-cfg-tienda-nueva', true); }
 // Una vez: sin números bajo el código, como el cartel de Labeljoy (se pueden volver a poner con la casilla)
@@ -643,12 +647,13 @@ $('#c-modelo').innerHTML = Object.entries(MODELOS).map(([k, m]) => `<option valu
 function cfgAInputs() {
   $('#c-modelo').value = cfg.modelo;
   CAMPOS.forEach(k => $('#c-' + k).value = cfg[k]);
-  $('#c-inicio').value = cfg.inicio; $('#c-borde').checked = cfg.borde; $('#c-fecha').checked = cfg.fecha; $('#c-num').checked = cfg.num;
+  $('#c-inicio').value = cfg.inicio; $('#c-borde').checked = cfg.borde; $('#c-fecha').checked = cfg.fecha; $('#c-num').checked = cfg.num; $('#c-reduc').value = cfg.reduc;
   $('#zoom').value = cfg.zoom; $('#hojas').style.setProperty('--z', cfg.zoom);
 }
 $('#c-modelo').onchange = () => { cfg.modelo = $('#c-modelo').value; if (cfg.modelo !== 'otro') Object.assign(cfg, MODELOS[cfg.modelo]); delete cfg.n; cfgAInputs(); guardarCfg(); };
 CAMPOS.forEach(k => $('#c-' + k).addEventListener('change', () => { cfg[k] = num($('#c-' + k).value) ?? 0; cfg.modelo = 'otro'; $('#c-modelo').value = 'otro'; guardarCfg(); }));
 $('#c-inicio').onchange = () => { cfg.inicio = Math.max(1, parseInt($('#c-inicio').value) || 1); guardarCfg(); };
+$('#c-reduc').onchange = () => { cfg.reduc = Math.min(0.2, Math.max(0, num($('#c-reduc').value) ?? 0.18)); $('#c-reduc').value = cfg.reduc; guardarCfg(); };
 ['borde', 'fecha', 'num'].forEach(k => $('#c-' + k).onchange = () => { cfg[k] = $('#c-' + k).checked; guardarCfg(); });
 $('#zoom').oninput = () => { cfg.zoom = +$('#zoom').value; $('#hojas').style.setProperty('--z', cfg.zoom); lsSet('etq-cfg', cfg); };
 function guardarCfg() { lsSet('etq-cfg', cfg); pintarHojas(); }
@@ -671,7 +676,7 @@ function htmlEtiqueta(l, x, y) {
     // El código empieza en un múltiplo del módulo desde el borde del papel, para que cada barra caiga en puntos enteros.
     const borde = cfg.borde ? 0.25 : 0;
     const izq = Math.round((+x + (W - total * mod) / 2) / mod) * mod - +x;
-    const s = svgBarras(l.c, altoBarras, mod);
+    const s = svgBarras(l.c, altoBarras, mod, cfg.reduc);
     bc = `<div class="bc" style="margin-left:${(izq - borde - pad).toFixed(3)}mm">${s.svg}${cfg.num ? `<div class="num">${esc(l.c)}</div>` : ''}</div>`;
   } else if (l.c) bc = `<div class="bc sinbc" style="align-self:center">${esc(l.c)}</div>`;
   const precioFs = Math.min(H * 0.56, W * 0.3);
