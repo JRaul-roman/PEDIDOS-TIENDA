@@ -198,7 +198,7 @@ textarea.in{min-height:180px;font:13px/1.4 ui-monospace,Consolas,monospace}
       <label class="chk"><input type="checkbox" id="c-fecha"> Poner fecha pequeña</label>
       <label class="chk"><input type="checkbox" id="c-num"> Números bajo el código</label>
     </div>
-    <p class="small muted" style="margin:0 0 12px">Al imprimir: tamaño A4, <b>escala 100 %</b> (o «Tamaño real») y <b>márgenes: ninguno</b>. Si las etiquetas salen un poco desplazadas, corrige los márgenes de arriba; se guardan en este ordenador.</p>
+    <p class="small muted" style="margin:0 0 12px">Al imprimir: tamaño A4, <b>escala 100 %</b> (o «Tamaño real») y <b>márgenes: ninguno</b>. Si las etiquetas salen un poco desplazadas, corrige los márgenes de arriba; se guardan en este ordenador.<br>Si el código de barras sale gris o borroso: en «Más opciones» deja <b>sin marcar «Imprimir como imagen»</b>, y en «Imprimir con el cuadro de diálogo del sistema» › Preferencias pon <b>calidad Alta</b> (en calidad rápida/borrador la Epson echa menos tinta y las barras salen grises).</p>
     <div class="preview-wrap"><div id="hojas"></div></div>
   </section>
 </main>
@@ -306,35 +306,16 @@ function code128(s) {
 function codificar(code) {
   code = String(code || '').trim();
   if (!code) return null;
-  // margen blanco izquierdo algo menor que el estándar (11): el cartel ya deja blanco alrededor
-  if (/^\d{13}$/.test(code) && eanValido(code)) return { m: ean13(code), tipo: 'EAN-13', q: [9, 7] };
+  // márgenes blancos estándar (11 y 7 módulos en EAN-13): con menos, algunos lectores no encuentran el principio
+  if (/^\d{13}$/.test(code) && eanValido(code)) return { m: ean13(code), tipo: 'EAN-13', q: [11, 7] };
   if (/^\d{12}$/.test(code) && eanValido(code)) return { m: ean13('0' + code), tipo: 'UPC-A', q: [9, 9] };
   if (/^\d{8}$/.test(code) && eanValido(code)) return { m: ean8(code), tipo: 'EAN-8', q: [7, 7] };
   const m = code128(code);
   return m ? { m, tipo: 'Code 128', q: [10, 10] } : null;
 }
-/* El código para imprimir, como imagen en blanco y negro puro (10 píxeles por módulo = 720 ppp con módulos de 1/72"),
-   sin suavizar. Dibujado como vector, el navegador lo suavizaba al imprimir: las barras salían grises y el lector
-   no las leía, aunque en pantalla se vieran bien. */
-const cacheBarras = new Map();
-function imgBarras(code, altoMm, moduloMm) {
-  const c = codificar(code);
-  if (!c) return null;
-  const total = c.q[0] + c.m.length + c.q[1], k = 10;
-  let url = cacheBarras.get(code);
-  if (!url) {
-    const cv = document.createElement('canvas');
-    cv.width = total * k; cv.height = 8;
-    const g = cv.getContext('2d');
-    g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
-    g.fillStyle = '#000';
-    for (let i = 0; i < c.m.length; i++) if (c.m[i] === '1') g.fillRect((c.q[0] + i) * k, 0, k, cv.height);
-    url = cv.toDataURL('image/png');
-    cacheBarras.set(code, url);
-  }
-  const ancho = total * moduloMm;
-  return { html: `<img class="barras" src="${url}" alt="" style="width:${ancho.toFixed(3)}mm;height:${altoMm.toFixed(3)}mm">`, tipo: c.tipo, ancho, modulos: total };
-}
+/* El código para imprimir va en VECTOR (rectángulos negros), como lo manda Labeljoy: la impresora pinta cada barra
+   exacta a su resolución. Como imagen (PNG), el navegador y el driver la reescalaban al imprimir y los bordes de las
+   barras salían borrosos/grises, y el lector no las leía (comprobado en el PDF que genera el navegador, 2026-11-05). */
 function svgBarras(code, altoMm, moduloMm) {
   const c = codificar(code);
   if (!c) return null;
@@ -677,7 +658,7 @@ function htmlEtiqueta(l, x, y) {
   const W = cfg.w, H = cfg.h;
   const pad = Math.max(1.5, Math.min(W, H) * 0.06);
   const descFs = Math.min(H * 0.105, W * 0.06, 4.6);
-  const altoBarras = Math.max(5, H * 0.19);
+  const altoBarras = Math.max(6, H * 0.23);   // ~7 mm en la etiqueta de 30 mm: más fácil de leer con el lector de mano
   const numFs = Math.min(2.6, Math.max(1.8, H * 0.065));
   let bc = '';
   const c = l.c && codificar(l.c);
@@ -690,8 +671,8 @@ function htmlEtiqueta(l, x, y) {
     // El código empieza en un múltiplo del módulo desde el borde del papel, para que cada barra caiga en puntos enteros.
     const borde = cfg.borde ? 0.25 : 0;
     const izq = Math.round((+x + (W - total * mod) / 2) / mod) * mod - +x;
-    const s = imgBarras(l.c, altoBarras, mod);
-    bc = `<div class="bc" style="margin-left:${(izq - borde - pad).toFixed(3)}mm">${s.html}${cfg.num ? `<div class="num">${esc(l.c)}</div>` : ''}</div>`;
+    const s = svgBarras(l.c, altoBarras, mod);
+    bc = `<div class="bc" style="margin-left:${(izq - borde - pad).toFixed(3)}mm">${s.svg}${cfg.num ? `<div class="num">${esc(l.c)}</div>` : ''}</div>`;
   } else if (l.c) bc = `<div class="bc sinbc" style="align-self:center">${esc(l.c)}</div>`;
   const precioFs = Math.min(H * 0.56, W * 0.3);
   const [ent, dec] = fmt(l.p).split(',');
