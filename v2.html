@@ -320,14 +320,22 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
 .pill.wait::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;animation:blink 1.1s infinite}
 @keyframes blink{50%{opacity:.25}}
 .env-more{border:0;background:transparent;color:var(--primary);font-weight:700;font-size:12.5px;padding:4px 0}
-/* Precios como app propia (tarjeta "Precios de venta" del lanzador: v2.html#precios): sin nada de Pedidos alrededor */
-body.solo-precios{padding-bottom:0;background:var(--surface)}
+.pr-cod{margin-top:12px;padding-top:12px;border-top:1.5px dashed color-mix(in srgb,var(--primary) 35%,var(--border))}
+.pr-cod-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pr-cod-row .grow{flex:1 1 160px;min-width:0}
+.pr-cod-row span{display:block;font-size:12px;font-weight:700;color:var(--muted)}
+.pr-cod-row b{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.pr-cod-form{margin-top:10px}
+.pr-cod-form[hidden]{display:none}
+.pr-cod-form .searchbar{background:var(--surface)}
+.pr-cod-form input{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.env .e-tipo{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--primary);background:var(--primary-soft);border-radius:6px;padding:1px 6px;margin-right:6px;vertical-align:1px}
+/* Precios como app propia (tarjeta "Precios de venta" del lanzador: v2.html#precios): la misma ventana centrada,
+   pero sin nada de Pedidos detrás y sin botón de cerrar */
+body.solo-precios{padding-bottom:0;background:var(--bg)}
 body.solo-precios>.hero,body.solo-precios>.layout,body.solo-precios>.bottomnav{display:none!important}
-body.solo-precios #dlg-precios{position:static;display:block;width:100%;max-width:none;margin:0;padding:0}
-body.solo-precios #dlg-precios .sheet-inner{max-height:none;min-height:100vh;border:0;border-radius:0;overflow:visible}
-body.solo-precios .pr-hero{padding-top:calc(16px + env(safe-area-inset-top))}
-body.solo-precios .pr-hero .hero-inner,body.solo-precios .pr-hero>*{max-width:900px;margin-left:auto;margin-right:auto}
-body.solo-precios .pr-tools,body.solo-precios .pr-body{max-width:900px;width:100%;margin:0 auto;overflow:visible}
+body.solo-precios #dlg-precios::backdrop{background:var(--bg);backdrop-filter:none}
+body.solo-precios #dlg-precios .sheet-inner{box-shadow:var(--shadow)}
 body.solo-precios #dlg-precios [data-close]{display:none}
 
 #print-area{display:none}
@@ -485,7 +493,7 @@ body.solo-precios #dlg-precios [data-close]{display:none}
         <div class="logo"><i data-ic="euro"></i></div>
         <div class="brand">
           <h1>Precios de venta</h1>
-          <p id="pr-status">Cambia el precio y se aplica solo en Glop</p>
+          <p id="pr-status">Cambia el precio o el código de barras y se aplica solo en Glop</p>
         </div>
         <div class="hero-actions"><button class="icon-btn" data-close aria-label="Cerrar"><i data-ic="x"></i></button></div>
       </div>
@@ -1246,8 +1254,9 @@ function scanStatus(msg, cls = '') { const el = $('#scan-status'); el.textConten
 async function openScanner() {
   if (!window.Html5Qrcode) return toast('No se pudo cargar el escáner (¿sin conexión?).', { type: 'err' });
   $('#scan-burst').checked = S.cfg.burst;
-  $('#scan-burst').closest('label').hidden = scanMode === 'precio';
-  scanStatus(scanMode === 'precio' ? 'Apunta al código del producto para cambiarle el precio' : 'Apunta la cámara al código de barras');
+  $('#scan-burst').closest('label').hidden = scanMode !== 'pedido';
+  scanStatus(scanMode === 'codigo' ? 'Apunta al código de barras NUEVO del producto'
+    : scanMode === 'precio' ? 'Apunta al código del producto para cambiarle el precio' : 'Apunta la cámara al código de barras');
   showScanPick(null);
   $('#dlg-scan').showModal();
   try {
@@ -1272,6 +1281,14 @@ function onScan(text) {
   const now = Date.now();
   if (text === lastScan.code && now - lastScan.t < 2200) return;
   lastScan = { code: text, t: now };
+  if (scanMode === 'codigo') {
+    // código de barras NUEVO del producto que se está cambiando
+    beep(true);
+    $('#dlg-scan').close();
+    const i = $('#pr-cod-new');
+    if (i) { i.value = text; const p = prCodCheck(); if (!p) $('#pr-cod-send').focus(); else i.focus(); }
+    return;
+  }
   if (scanMode === 'precio') {
     const pr = prFindByCode(text);
     if (!pr) { beep(false); scanStatus(`El código ${text} no está en la lista de precios`, 'err'); return; }
@@ -1335,7 +1352,10 @@ function prLoad(force = false) {
       for (const [k, o] of Object.entries(PR.over)) if (o.t < caduca) delete PR.over[k];
       store.set(KP.over, PR.over);
       PR.rows = data.filter(r => Array.isArray(r) && r[0]).map((r, i) => ({ i, d: String(r[0]), c: String(r[1] || ''), o: String(r[2] || ''), pvp: Number(r[3]), iva: r[4], fam: String(r[5] || ''), n: norm(r[0]) }));
-      for (const r of PR.rows) { const ov = PR.over[prKey(r.d, r.c)]; if (ov) r.pvp = ov.pvp; }
+      for (const r of PR.rows) {
+        const ov = PR.over[prKey(r.d, r.c)]; if (ov) r.pvp = ov.pvp;
+        const oc = PR.over['cod:' + prKey(r.d, r.c)]; if (oc) r.c = oc.c;
+      }
       PR.byCode = new Map();
       for (const r of PR.rows) for (const c of [r.c, r.o]) {
         if (!c) continue;
@@ -1400,7 +1420,8 @@ function prSelect(r) {
   PR.sel = r;
   $('#pr-search').value = '';
   prSearch();
-  const pend = PR.env.find(e => (e.estado === 'esperando' || e.estado === 'enviando') && prKey(e.d, e.c) === prKey(r.d, r.c));
+  const pend = PR.env.find(e => e.tipo !== 'codigo' && (e.estado === 'esperando' || e.estado === 'enviando') && prKey(e.d, e.c) === prKey(r.d, r.c));
+  const pendCod = PR.env.find(e => e.tipo === 'codigo' && (e.estado === 'esperando' || e.estado === 'enviando') && prKey(e.d, e.c) === prKey(r.d, r.c));
   const info = [r.c && 'Código ' + r.c, r.o && r.o !== r.c && 'Otro código ' + r.o, r.fam, r.iva !== '' && r.iva != null && 'IVA ' + String(r.iva).replace('.', ',') + ' %'].filter(Boolean);
   const box = $('#pr-card');
   box.innerHTML = `<div class="p-label">Cambiar precio</div><div class="p-desc">${esc(r.d)}</div>
@@ -1410,7 +1431,17 @@ function prSelect(r) {
       <label class="pr-box new"><span>Precio nuevo</span><input id="pr-new" inputmode="decimal" enterkeyhint="send" autocomplete="off" placeholder="${isNaN(r.pvp) ? '0,00' : r.pvp.toFixed(2).replace('.', ',')}"><div class="pr-diff" id="pr-diff"></div></label>
     </div>
     <div class="pr-quick">${[-0.10, -0.05, 0.05, 0.10, 0.20, 0.50].map(d => `<button type="button" data-q="${d}">${d > 0 ? '+' : '−'}${Math.abs(d).toFixed(2).replace('.', ',')} €</button>`).join('')}</div>
-    <div class="pr-actions"><button class="btn btn-primary" id="pr-send">${icon('check')}Cambiar en Glop</button><button class="btn btn-ghost" id="pr-cancel">Cancelar</button></div>`;
+    <div class="pr-actions"><button class="btn btn-primary" id="pr-send">${icon('check')}Cambiar en Glop</button><button class="btn btn-ghost" id="pr-cancel">Cancelar</button></div>
+    <div class="pr-cod">
+      <div class="pr-cod-row"><div class="grow"><span>Código de barras (Cod. Barras / libre)</span><b>${r.c ? esc(r.c) : '<i class="muted">sin código</i>'}</b>${pendCod ? `<div class="pr-diff up">En camino: ${esc(pendCod.nuevo)}</div>` : ''}</div>
+        <button class="btn" type="button" id="pr-cod-edit">${icon('barcode')}Cambiar código</button></div>
+      <div class="pr-cod-form" id="pr-cod-form" hidden>
+        <div class="searchbar"><input id="pr-cod-new" inputmode="numeric" autocomplete="off" enterkeyhint="done" placeholder="Escanea o escribe el código nuevo" aria-label="Código de barras nuevo">
+          <button class="scan-btn" type="button" id="pr-cod-scan" title="Escanear el código nuevo">${icon('scan')}<span>Escanear</span></button></div>
+        <div class="pr-diff" id="pr-cod-msg"></div>
+        <div class="pr-actions"><button class="btn btn-primary" type="button" id="pr-cod-send">${icon('check')}Cambiar código en Glop</button></div>
+      </div>
+    </div>`;
   box.hidden = false;
   box.style.animation = 'none'; void box.offsetWidth; box.style.animation = '';
   $('.pr-body').scrollTop = 0;
@@ -1444,6 +1475,53 @@ function prSend() {
   prUpload(ent, true);
 }
 
+/* Cambiar el código de barras: va a "Cod. Barras / libre" de la ficha de Glop y sustituye al que había */
+function prCodOpen() {
+  const f = $('#pr-cod-form'); if (!f) return;
+  f.hidden = false;
+  const i = $('#pr-cod-new'); i.value = ''; $('#pr-cod-msg').textContent = ''; i.focus();
+}
+// null si vale; si no, el texto del problema
+function prCodProblem(r, nc) {
+  if (!nc) return 'Escanea o escribe el código nuevo';
+  if (!/^[0-9A-Za-z]{3,30}$/.test(nc)) return 'El código tiene que tener entre 3 y 30 números o letras, sin espacios';
+  if (r.c && stripZeros(nc) === stripZeros(r.c)) return 'Es el mismo código que ya tiene';
+  const otro = prFindByCode(nc);
+  if (otro && prKey(otro.d, otro.c) !== prKey(r.d, r.c)) return `Ese código ya es de otro producto: ${otro.d}`;
+  return null;
+}
+function prCodCheck() {
+  const r = PR.sel, el = $('#pr-cod-msg'); if (!r || !el) return null;
+  const nc = $('#pr-cod-new').value.trim();
+  const p = nc ? prCodProblem(r, nc) : null;
+  el.className = 'pr-diff' + (p ? ' down' : nc ? ' up' : '');
+  el.textContent = p || (nc ? `${r.c || 'sin código'} → ${nc}` : '');
+  return p;
+}
+function prSendCodigo() {
+  const r = PR.sel; if (!r) return;
+  const nc = $('#pr-cod-new').value.trim();
+  const p = prCodProblem(r, nc);
+  if (p) { const el = $('#pr-cod-msg'); el.textContent = p; el.className = 'pr-diff down'; $('#pr-cod-new').focus(); return; }
+  if (!confirm(`¿Cambiar el código de barras de ${r.d}?\n\n${r.c || '(sin código)'}  →  ${nc}\n\nSe guarda en "Cod. Barras / libre" de Glop y el código anterior deja de valer en caja.`)) return;
+  const ent = { tipo: 'codigo', k: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: Date.now(), d: r.d, c: r.c, o: r.o, visto: r.c, nuevo: nc, estado: 'enviando' };
+  PR.env.unshift(ent); prSaveEnv(); prRenderEnv();
+  prCloseCard();
+  if (!matchMedia('(pointer:coarse)').matches) $('#pr-search').focus();
+  prUpload(ent, true);
+}
+function prApplyCodigoLocal(e) {
+  const nuevo = String(e.ahora || '').trim(); if (!nuevo) return;
+  const k = prKey(e.d, e.c);
+  PR.over['cod:' + k] = { c: nuevo, t: Date.now() }; store.set(KP.over, PR.over);   // hasta que llegue a pvp.json
+  for (const r of PR.rows) if (prKey(r.d, r.c) === k) {
+    for (const c of [r.c, stripZeros(r.c)]) if (c && PR.byCode.get(c) === r) PR.byCode.delete(c);
+    r.c = nuevo;
+    for (const c of [nuevo, stripZeros(nuevo)]) if (c) PR.byCode.set(c, r);
+  }
+  prSearch();
+}
+
 async function prUpload(ent, interactive) {
   ent.estado = 'enviando'; ent.msg = ''; prSaveEnv(); prRenderEnv();
   try {
@@ -1452,13 +1530,15 @@ async function prUpload(ent, interactive) {
     await DrivePedidos.ensure(interactive);
     PR.needAuth = false; prAuthBar();
     const stamp = new Date(ent.t).toISOString().replace(/\D/g, '').slice(0, 14);
-    ent.driveId = await DrivePedidos.uploadJson(PR_FOLDER, `precio-${stamp}-${ent.k}.json`, {
-      tipo: 'cambio-precio', version: 1, estado: 'pendiente', creado: new Date(ent.t).toISOString(),
-      codigo: ent.c, otro: ent.o, descripcion: ent.d, visto: isNaN(ent.visto) ? '' : Number(ent.visto).toFixed(2),
-      nuevo: ent.nuevo.toFixed(2), dispositivo: 'tablet'
-    });
+    const datos = ent.tipo === 'codigo'
+      ? { tipo: 'cambio-codigo', version: 1, estado: 'pendiente', creado: new Date(ent.t).toISOString(),
+          codigo: ent.c, otro: ent.o, descripcion: ent.d, codigoNuevo: ent.nuevo, dispositivo: 'tablet' }
+      : { tipo: 'cambio-precio', version: 1, estado: 'pendiente', creado: new Date(ent.t).toISOString(),
+          codigo: ent.c, otro: ent.o, descripcion: ent.d, visto: isNaN(ent.visto) ? '' : Number(ent.visto).toFixed(2),
+          nuevo: ent.nuevo.toFixed(2), dispositivo: 'tablet' };
+    ent.driveId = await DrivePedidos.uploadJson(PR_FOLDER, `${ent.tipo === 'codigo' ? 'codigo' : 'precio'}-${stamp}-${ent.k}.json`, datos);
     ent.estado = 'esperando'; ent.enviado = Date.now();
-    toast(`Enviado: ${ent.d} a ${euro(ent.nuevo)}`, { type: 'ok' });
+    toast(ent.tipo === 'codigo' ? `Enviado: código nuevo de ${ent.d}` : `Enviado: ${ent.d} a ${euro(ent.nuevo)}`, { type: 'ok' });
     prPollSoon(5000);
   } catch (e) {
     ent.estado = 'no-enviado'; ent.msg = e.message;
@@ -1479,7 +1559,8 @@ async function prPoll() {
       const r = await DrivePedidos.readJson(e.driveId);
       if (r && (r.estado === 'hecho' || r.estado === 'error')) {
         Object.assign(e, { estado: r.estado, msg: r.mensaje || '', antes: r.antes, ahora: r.ahora, glop: r.glop?.descripcion || '', hecho: Date.now() });
-        if (r.estado === 'hecho') { prApplyLocal(e); toast(`✓ Ya en Glop: ${e.d} a ${euro(e.ahora)}`, { type: 'ok', timeout: 5000 }); }
+        if (r.estado === 'hecho' && e.tipo === 'codigo') { prApplyCodigoLocal(e); toast(`✓ Ya en Glop: ${e.d} con el código ${e.ahora}`, { type: 'ok', timeout: 5000 }); }
+        else if (r.estado === 'hecho') { prApplyLocal(e); toast(`✓ Ya en Glop: ${e.d} a ${euro(e.ahora)}`, { type: 'ok', timeout: 5000 }); }
         else toast(`No se pudo cambiar ${e.d}: ${e.msg}`, { type: 'err', timeout: 9000 });
       }
     } catch (err) {
@@ -1520,13 +1601,14 @@ function prRenderEnv() {
     const hora = (isToday(e.t) ? '' : when.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ') + when.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     let msg = e.msg || '';
     if (e.estado === 'esperando' && Date.now() - (e.enviado || e.t) > 10 * 60000) msg = 'Tarda más de lo normal: ¿está encendido el ordenador de la tienda? Se aplicará en cuanto lo esté.';
-    const antes = e.estado === 'hecho' ? Number(e.antes) : e.visto;
-    const ahora = e.estado === 'hecho' ? Number(e.ahora) : e.nuevo;
-    return `<li class="env" data-env="${i}"><div class="grow"><div class="e-desc">${esc(e.d)}</div>
+    const cod = e.tipo === 'codigo';
+    const antes = cod ? esc((e.estado === 'hecho' ? e.antes : e.visto) || 'sin código') : euro(e.estado === 'hecho' ? Number(e.antes) : e.visto);
+    const ahora = cod ? esc(e.estado === 'hecho' ? e.ahora : e.nuevo) : euro(e.estado === 'hecho' ? Number(e.ahora) : e.nuevo);
+    return `<li class="env" data-env="${i}"><div class="grow"><div class="e-desc">${cod ? '<span class="e-tipo">código</span>' : ''}${esc(e.d)}</div>
       <div class="e-sub">${hora}${e.c ? ' · ' + esc(e.c) : ''}</div>
       ${msg ? `<div class="e-msg ${e.estado === 'hecho' ? 'warn' : e.estado === 'esperando' ? 'warn' : 'err'}">${esc(msg)}</div>` : ''}
       ${e.estado === 'no-enviado' ? `<button class="env-more" data-retry="${i}">Reintentar</button>` : ''}</div>
-      <div class="env-right"><span class="pill ${cls}">${txt}</span><div class="e-price"><s>${euro(antes)}</s> ${euro(ahora)}</div></div></li>`;
+      <div class="env-right"><span class="pill ${cls}">${txt}</span><div class="e-price"><s>${antes}</s> ${ahora}</div></div></li>`;
   }).join('');
 }
 
@@ -1534,7 +1616,7 @@ const soloPrecios = () => document.body.classList.contains('solo-precios');
 function prOpen() {
   const dlg = $('#dlg-precios');
   dlg.appendChild($('#toasts'));          // los avisos se ven por encima de la ventana
-  if (soloPrecios()) dlg.show(); else dlg.showModal();
+  dlg.showModal();
   prRenderEnv(); prAuthBar(); prSearch();
   prLoad().then(() => { prSearch(); if (PR.sel) prSelect(PR.sel); });
   if (!matchMedia('(pointer:coarse)').matches) setTimeout(() => $('#pr-search').focus(), 60);
@@ -1570,9 +1652,18 @@ function bindPrecios() {
     }
     if (e.target.closest('#pr-send')) prSend();
     else if (e.target.closest('#pr-cancel')) { prCloseCard(); search.focus(); }
+    else if (e.target.closest('#pr-cod-edit')) prCodOpen();
+    else if (e.target.closest('#pr-cod-send')) prSendCodigo();
+    else if (e.target.closest('#pr-cod-scan')) { scanMode = 'codigo'; openScanner(); }
   });
-  card.addEventListener('input', e => { if (e.target.id === 'pr-new') prDiff(); });
+  card.addEventListener('input', e => { if (e.target.id === 'pr-new') prDiff(); else if (e.target.id === 'pr-cod-new') prCodCheck(); });
   card.addEventListener('keydown', e => {
+    if (e.target.id === 'pr-cod-new') {
+      // el lector de códigos escribe el código y pulsa Intro: se comprueba y se pide confirmación
+      if (e.key === 'Enter') { e.preventDefault(); prSendCodigo(); }
+      else if (e.key === 'Escape') { e.preventDefault(); $('#pr-cod-form').hidden = true; }
+      return;
+    }
     if (e.target.id !== 'pr-new') return;
     if (e.key === 'Enter') { e.preventDefault(); prSend(); }
     else if (e.key === 'Escape') { e.preventDefault(); prCloseCard(); search.focus(); }
@@ -1605,8 +1696,9 @@ function initPrecios() {
     document.title = 'Precios de venta';
     const tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.content = '#6d28d9';
     prOpen();
-    // en este modo no se puede cerrar: si algo la cierra, se vuelve a abrir
-    $('#dlg-precios').addEventListener('close', () => { if (soloPrecios()) setTimeout(() => $('#dlg-precios').show(), 0); });
+    // en este modo no se cierra (ni con Esc ni tocando fuera): si algo la cierra, se vuelve a abrir
+    $('#dlg-precios').addEventListener('cancel', e => e.preventDefault());
+    $('#dlg-precios').addEventListener('close', () => { if (soloPrecios()) setTimeout(prOpen, 0); });
   }
 }
 
@@ -1776,7 +1868,10 @@ function bind() {
 
   // Diálogos
   $$('dialog').forEach(d => {
-    d.addEventListener('click', e => { if (e.target === d || e.target.closest('[data-close]')) d.close(); });
+    d.addEventListener('click', e => {
+      if (d.id === 'dlg-precios' && soloPrecios()) return;   // Precios abierto como app propia: no se cierra
+      if (e.target === d || e.target.closest('[data-close]')) d.close();
+    });
   });
   $('#dlg-scan').addEventListener('close', () => { stopScanner(); scanMode = 'pedido'; });
   $('#scan-burst').addEventListener('change', e => { S.cfg.burst = e.target.checked; saveCfg(); });
