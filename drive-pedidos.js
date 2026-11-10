@@ -141,7 +141,18 @@
         method: 'POST', body: multipart({ name: filename, parents: [parent], mimeType: 'application/pdf' }, blob)
       });
       return f.id;
-    }
+    },
+    /** Crea un archivo JSON nuevo en PEDIDOS/<subfolder>. Devuelve su id en Drive. */
+    async uploadJson(subfolder, filename, obj) {
+      const parent = await folder(subfolder, await folder(ROOT_NAME, 'root'));
+      const blob = new Blob([JSON.stringify(obj, null, 1)], { type: 'application/json' });
+      const f = await gfetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+        method: 'POST', body: multipart({ name: filename, parents: [parent], mimeType: 'application/json' }, blob)
+      });
+      return f.id;
+    },
+    /** Lee el contenido de un archivo JSON creado por la app (puede haberlo reescrito el ordenador de la tienda). */
+    readJson: id => gfetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, { cache: 'no-store' })
   };
   window.DrivePedidos = api;
 })();
