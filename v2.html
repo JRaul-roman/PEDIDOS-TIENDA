@@ -320,6 +320,15 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
 .pill.wait::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;animation:blink 1.1s infinite}
 @keyframes blink{50%{opacity:.25}}
 .env-more{border:0;background:transparent;color:var(--primary);font-weight:700;font-size:12.5px;padding:4px 0}
+/* Precios como app propia (tarjeta "Precios de venta" del lanzador: v2.html#precios): sin nada de Pedidos alrededor */
+body.solo-precios{padding-bottom:0;background:var(--surface)}
+body.solo-precios>.hero,body.solo-precios>.layout,body.solo-precios>.bottomnav{display:none!important}
+body.solo-precios #dlg-precios{position:static;display:block;width:100%;max-width:none;margin:0;padding:0}
+body.solo-precios #dlg-precios .sheet-inner{max-height:none;min-height:100vh;border:0;border-radius:0;overflow:visible}
+body.solo-precios .pr-hero{padding-top:calc(16px + env(safe-area-inset-top))}
+body.solo-precios .pr-hero .hero-inner,body.solo-precios .pr-hero>*{max-width:900px;margin-left:auto;margin-right:auto}
+body.solo-precios .pr-tools,body.solo-precios .pr-body{max-width:900px;width:100%;margin:0 auto;overflow:visible}
+body.solo-precios #dlg-precios [data-close]{display:none}
 
 #print-area{display:none}
 @media print{
@@ -1521,10 +1530,11 @@ function prRenderEnv() {
   }).join('');
 }
 
+const soloPrecios = () => document.body.classList.contains('solo-precios');
 function prOpen() {
   const dlg = $('#dlg-precios');
   dlg.appendChild($('#toasts'));          // los avisos se ven por encima de la ventana
-  dlg.showModal();
+  if (soloPrecios()) dlg.show(); else dlg.showModal();
   prRenderEnv(); prAuthBar(); prSearch();
   prLoad().then(() => { prSearch(); if (PR.sel) prSelect(PR.sel); });
   if (!matchMedia('(pointer:coarse)').matches) setTimeout(() => $('#pr-search').focus(), 60);
@@ -1589,11 +1599,15 @@ function initPrecios() {
   bindPrecios();
   prRenderEnv();
   if (PR.env.some(e => e.estado === 'esperando') && window.DrivePedidos?.status().active) prPollSoon(1500);
-  // v2.html#precios (tarjeta "Precios" del lanzador de apps) abre directamente Precios
-  const abrirSiToca = () => { if (location.hash === '#precios' && !$('#dlg-precios').open) prOpen(); };
-  abrirSiToca();
-  window.addEventListener('hashchange', abrirSiToca);
-  $('#dlg-precios').addEventListener('close', () => { if (location.hash === '#precios') history.replaceState(null, '', location.pathname + location.search); });
+  // v2.html#precios (tarjeta "Precios de venta" del lanzador de apps): Precios a pantalla completa, como una app propia
+  if (location.hash === '#precios') {
+    document.body.classList.add('solo-precios');
+    document.title = 'Precios de venta';
+    const tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.content = '#6d28d9';
+    prOpen();
+    // en este modo no se puede cerrar: si algo la cierra, se vuelve a abrir
+    $('#dlg-precios').addEventListener('close', () => { if (soloPrecios()) setTimeout(() => $('#dlg-precios').show(), 0); });
+  }
 }
 
 /* ---------- Vistas, ajustes, copias ---------- */
