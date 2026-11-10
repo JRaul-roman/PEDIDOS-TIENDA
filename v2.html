@@ -1319,9 +1319,11 @@ function prLoad(force = false) {
       const res = await fetch('pvp.json?_=' + Date.now(), { cache: 'no-store' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
-      PR.listed = Date.parse(res.headers.get('Last-Modified') || '') || Date.now();
+      // GitHub Pages dice cuándo se publicó pvp.json; Netlify no (entonces se guardan 75 minutos)
+      PR.listed = Date.parse(res.headers.get('Last-Modified') || '') || 0;
       // Los cambios hechos aquí se recuerdan hasta que llegan a pvp.json (se vuelve a publicar cada hora)
-      for (const [k, o] of Object.entries(PR.over)) if (o.t < PR.listed) delete PR.over[k];
+      const caduca = PR.listed || Date.now() - 75 * 60000;
+      for (const [k, o] of Object.entries(PR.over)) if (o.t < caduca) delete PR.over[k];
       store.set(KP.over, PR.over);
       PR.rows = data.filter(r => Array.isArray(r) && r[0]).map((r, i) => ({ i, d: String(r[0]), c: String(r[1] || ''), o: String(r[2] || ''), pvp: Number(r[3]), iva: r[4], fam: String(r[5] || ''), n: norm(r[0]) }));
       for (const r of PR.rows) { const ov = PR.over[prKey(r.d, r.c)]; if (ov) r.pvp = ov.pvp; }
@@ -1342,7 +1344,9 @@ function prLoad(force = false) {
 }
 function prStatus() {
   if (!PR.loaded) return;
-  $('#pr-status').textContent = `${plural(PR.rows.length, 'producto', 'productos')} · precios de Glop de las ${new Date(PR.listed).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
+  $('#pr-status').textContent = `${plural(PR.rows.length, 'producto', 'productos')} · ` + (PR.listed
+    ? `precios de Glop de las ${new Date(PR.listed).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
+    : 'precios de Glop (se actualizan cada hora)');
 }
 const prFindByCode = code => { code = String(code).trim(); return PR.byCode.get(code) || PR.byCode.get(stripZeros(code)) || null; };
 
@@ -1585,6 +1589,11 @@ function initPrecios() {
   bindPrecios();
   prRenderEnv();
   if (PR.env.some(e => e.estado === 'esperando') && window.DrivePedidos?.status().active) prPollSoon(1500);
+  // v2.html#precios (tarjeta "Precios" del lanzador de apps) abre directamente Precios
+  const abrirSiToca = () => { if (location.hash === '#precios' && !$('#dlg-precios').open) prOpen(); };
+  abrirSiToca();
+  window.addEventListener('hashchange', abrirSiToca);
+  $('#dlg-precios').addEventListener('close', () => { if (location.hash === '#precios') history.replaceState(null, '', location.pathname + location.search); });
 }
 
 /* ---------- Vistas, ajustes, copias ---------- */
