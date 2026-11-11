@@ -6,15 +6,15 @@
 <meta name="theme-color" content="#0f766e">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Artículos Tienda">
-<title>Artículos Tienda</title>
+<meta name="apple-mobile-web-app-title" content="Alta - Modificación Artículos">
+<title>Alta - Modificación Artículos</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script defer src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="drive-pedidos.js"></script>
 <!--
-  Artículos Tienda (tarjeta del lanzador de apps). Dos opciones:
+  Alta - Modificación Artículos (tarjeta del lanzador de apps). Dos opciones:
   - Nuevo producto: ficha parecida a la de Glop (Artículos → Nuevo): código de barras, descripción, descripción pedidos,
     familia de venta, impuesto y precio de venta.
   - Cambiar precio: lo mismo que "Precios de venta" de Pedidos 2.0 (v2.html#precios): precio y/o código de barras.
@@ -231,7 +231,7 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
   <div class="hero-inner">
     <div class="brand-row">
       <div class="logo"><i data-ic="box"></i></div>
-      <div class="brand"><h1>Artículos Tienda</h1><p id="st-lista">Cargando productos de Glop…</p></div>
+      <div class="brand"><h1>Alta - Modificación Artículos</h1><p id="st-lista">Cargando productos de Glop…</p></div>
     </div>
     <nav class="tabs" role="tablist" aria-label="Opciones">
       <button type="button" role="tab" data-tab="alta" class="on"><i data-ic="plus"></i>Nuevo producto</button>
@@ -467,7 +467,7 @@ function verTab(t, foco = true) {
   $('#tab-alta').hidden = t !== 'alta'; $('#tab-precio').hidden = t !== 'precio';
   $('#env').hidden = t !== 'alta'; $('#pr-env').hidden = t !== 'precio';
   $('#env-titulo').textContent = t === 'alta' ? 'Altas enviadas' : 'Cambios de precio enviados';
-  document.title = t === 'alta' ? 'Artículos Tienda' : 'Cambiar precio · Artículos Tienda';
+  document.title = t === 'alta' ? 'Alta - Modificación Artículos' : 'Cambiar precio · Alta - Modificación Artículos';
   history.replaceState(null, '', t === 'precio' ? '#precio' : location.pathname + location.search);
   pintarStats();
   if (foco && !tactil()) (t === 'alta' ? $('#a-cod') : PR.sel ? $('#pr-new') : $('#pr-search')).focus();
