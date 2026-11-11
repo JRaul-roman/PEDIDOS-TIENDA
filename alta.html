@@ -14,19 +14,23 @@
 <script defer src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="drive-pedidos.js"></script>
 <!--
-  Alta de productos en Glop desde la tablet (tarjeta "Alta Productos" del lanzador de apps).
-  La ficha se parece a la de Glop (Artículos → Nuevo): código de barras, descripción, descripción pedidos,
-  familia de venta, impuesto y precio de venta. Cada alta se deja como un archivo .json en Google Drive
-  (PEDIDOS / CAMBIOS PRECIO, la misma carpeta que Precios de venta); el ordenador de la tienda
-  (app-precios\vigilar-drive.ps1 → Alta-Articulo de glop.ps1) crea el artículo en Glop y reescribe ese mismo
-  archivo con la respuesta (código del artículo en Glop o el motivo del error), que aquí se va leyendo.
-  pvp.json (lo sube cada hora el ordenador) sirve para las familias y para avisar de códigos o nombres repetidos.
+  Alta Productos (tarjeta del lanzador de apps). Dos opciones:
+  - Nuevo producto: ficha parecida a la de Glop (Artículos → Nuevo): código de barras, descripción, descripción pedidos,
+    familia de venta, impuesto y precio de venta.
+  - Cambiar precio: lo mismo que "Precios de venta" de Pedidos 2.0 (v2.html#precios): precio y/o código de barras.
+    Usa las mismas claves de localStorage que v2.html, así que las dos apps ven los mismos cambios enviados.
+  Cada petición se deja como un archivo .json en Google Drive (PEDIDOS / CAMBIOS PRECIO); el ordenador de la tienda
+  (app-precios\vigilar-drive.ps1 → Alta-Articulo / Procesar-Articulo de glop.ps1) lo hace en Glop y reescribe ese mismo
+  archivo con la respuesta, que aquí se va leyendo.
+  pvp.json (lo sube cada hora el ordenador) es la lista de productos de Glop: búsqueda, familias y avisos de repetidos.
+  #precio en la dirección abre directamente "Cambiar precio".
 -->
 <style>
 :root{
   --bg:#f2f6f7; --surface:#ffffff; --surface-2:#f0f4f6; --text:#0f172a; --muted:#64748b; --border:#e1e8ec;
   --primary:#0f766e; --primary-ink:#ffffff; --primary-soft:#e6f5f3; --accent:#0891b2;
   --success:#059669; --success-soft:#e7f8f1; --danger:#dc2626; --danger-soft:#fdeeee; --warn:#b45309; --warn-soft:#fff6e5;
+  --mark:#fde68a; --mark-ink:#0f172a;
   --hero:linear-gradient(125deg,#0f766e 0%,#0e7490 55%,#4f46e5 100%);
   --shadow:0 1px 2px rgba(15,23,42,.05),0 10px 30px -12px rgba(20,60,80,.2);
   --radius:20px; color-scheme:light;
@@ -36,6 +40,7 @@
     --bg:#081417; --surface:#0f1e23; --surface-2:#16292f; --text:#e3f0f2; --muted:#8fa9b0; --border:#20373e;
     --primary:#2dd4bf; --primary-ink:#04201c; --primary-soft:#0f302c; --accent:#22d3ee;
     --success:#34d399; --success-soft:#0f2b23; --danger:#f87171; --danger-soft:#2d1619; --warn:#fbbf24; --warn-soft:#2b2210;
+    --mark:#5b4b12; --mark-ink:#fff7d6;
     --hero:linear-gradient(125deg,#134e4a 0%,#155e75 55%,#3730a3 100%);
     --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px -14px rgba(0,0,0,.6); color-scheme:dark;
   }
@@ -44,6 +49,7 @@
   --bg:#081417; --surface:#0f1e23; --surface-2:#16292f; --text:#e3f0f2; --muted:#8fa9b0; --border:#20373e;
   --primary:#2dd4bf; --primary-ink:#04201c; --primary-soft:#0f302c; --accent:#22d3ee;
   --success:#34d399; --success-soft:#0f2b23; --danger:#f87171; --danger-soft:#2d1619; --warn:#fbbf24; --warn-soft:#2b2210;
+  --mark:#5b4b12; --mark-ink:#fff7d6;
   --hero:linear-gradient(125deg,#134e4a 0%,#155e75 55%,#3730a3 100%);
   --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px -14px rgba(0,0,0,.6); color-scheme:dark;
 }
@@ -52,6 +58,7 @@ html{-webkit-text-size-adjust:100%}
 body{margin:0;font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.45;min-height:100vh;padding-bottom:calc(28px + env(safe-area-inset-bottom));-webkit-tap-highlight-color:transparent}
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
+[hidden]{display:none!important}
 .ic{width:20px;height:20px;flex-shrink:0}
 .muted{color:var(--muted)} .small{font-size:12.5px}
 h2{font-size:16px;margin:0;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
@@ -67,21 +74,26 @@ h2 .ic{color:var(--primary)}
 .brand{min-width:0}
 .brand h1{font-size:20px;margin:0;font-weight:800;letter-spacing:-.02em}
 .brand p{margin:0;font-size:12.5px;opacity:.88;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:18px}
+/* Opciones: nuevo producto / cambiar precio */
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:16px;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.2);border-radius:16px;padding:4px;max-width:520px}
+.tabs button{border:0;background:transparent;color:#fff;border-radius:12px;padding:10px 8px;font-weight:700;font-size:14.5px;display:flex;align-items:center;justify-content:center;gap:7px;opacity:.85}
+.tabs button.on{background:#fff;color:#0f172a;opacity:1;box-shadow:0 6px 16px -8px rgba(0,0,0,.45)}
+.tabs .ic{width:18px;height:18px}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
 .stat{background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.2);border-radius:16px;padding:10px 12px;min-width:0}
 .stat b{display:block;font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1.2;font-variant-numeric:tabular-nums}
 .stat span{font-size:11.5px;opacity:.88;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* Estructura */
 .layout{max-width:1120px;margin:-42px auto 0;padding:0 16px;display:grid;gap:16px;align-items:start;position:relative;z-index:2}
-@media (min-width:960px){.layout{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}.pane-env{position:sticky;top:16px}}
+@media (min-width:960px){.layout{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}.pane-env{position:sticky;top:16px}.auth{grid-column:1/-1}}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;min-width:0}
 .card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
 
 /* Ficha */
 .ficha{display:grid;gap:14px}
 .field{display:grid;gap:5px;min-width:0}
-.field>span,.lbl{font-size:12px;font-weight:700;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+.field>span{font-size:12px;font-weight:700;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
 .field input,.field select{width:100%;border:1.5px solid var(--border);background:var(--surface-2);border-radius:13px;padding:11px 12px;outline:none;transition:border-color .15s,background .15s;font-size:16px;min-width:0}
 .field input:focus,.field select:focus{border-color:var(--primary);background:var(--surface)}
 .field input.up{text-transform:uppercase;font-weight:700}
@@ -91,10 +103,12 @@ h2 .ic{color:var(--primary)}
 @media (max-width:560px){.grid2{grid-template-columns:1fr}}
 .msg{font-size:12.5px;font-weight:700;min-height:18px;color:var(--muted);overflow-wrap:anywhere}
 .msg.ok{color:var(--success)} .msg.err{color:var(--danger)} .msg.warn{color:var(--warn)}
+.link{border:0;background:transparent;color:var(--primary);font-weight:800;font-size:12.5px;padding:2px 0;text-decoration:underline;text-underline-offset:3px}
 .searchbar{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:16px;padding:5px 5px 5px 12px;transition:border-color .15s,box-shadow .15s}
 .searchbar:focus-within{border-color:var(--primary);box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 16%,transparent);background:var(--surface)}
 .searchbar>.ic{color:var(--muted)}
 .searchbar input{flex:1;min-width:0;border:0;background:transparent;outline:none;padding:9px 0;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.searchbar input[type=search]{font-weight:500;font-size:16px}
 .field.bad .searchbar{border-color:var(--danger)}
 .scan-btn{display:inline-flex;align-items:center;gap:7px;border:0;border-radius:12px;padding:10px 14px;background:var(--text);color:var(--surface);font-weight:700;font-size:14px;flex-shrink:0}
 @media (max-width:420px){.scan-btn span{display:none}}
@@ -121,21 +135,67 @@ h2 .ic{color:var(--primary)}
 .btn-primary:hover{filter:brightness(1.07)}
 .btn-ghost{background:transparent}
 .btn[disabled]{opacity:.45;pointer-events:none}
-.auth{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--warn-soft);color:var(--warn);border-radius:14px;padding:10px 12px;font-size:13px;font-weight:600}
-.auth[hidden]{display:none}
+.auth{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--warn-soft);color:var(--warn);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);border-radius:14px;padding:10px 12px;font-size:13px;font-weight:600}
 .auth span{flex:1 1 200px}
 .note{font-size:12.5px;color:var(--muted);margin:0}
 
-/* Altas enviadas */
+/* Cambiar precio: búsqueda y tarjeta del producto (como en Precios de venta) */
+.res-meta{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted);margin:10px 2px 6px;min-height:16px}
+@media (max-width:600px){.kbd-hint{display:none}}
+.res-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.res{display:flex;align-items:center;gap:10px;padding:10px 10px 10px 12px;border-radius:14px;border:1.5px solid transparent;background:var(--surface-2);cursor:pointer;transition:border-color .15s}
+.res:hover{border-color:var(--border)}
+.res.pr-sel{border-color:var(--primary);background:var(--primary-soft)}
+.res-main{flex:1;min-width:0}
+.res-desc{font-weight:600;font-size:14px;overflow-wrap:anywhere}
+.res-code{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;margin-top:2px;font-variant-numeric:tabular-nums;flex-wrap:wrap}
+.res-code .ic{width:14px;height:14px}
+mark{background:var(--mark);color:var(--mark-ink);border-radius:4px;padding:0 1px}
+.pr-pvp{font-weight:800;font-size:15px;font-variant-numeric:tabular-nums;white-space:nowrap;background:var(--surface);border:1.5px solid var(--border);border-radius:11px;padding:7px 11px}
+.pr-card{border:2px solid var(--primary);background:var(--primary-soft);border-radius:18px;padding:14px;margin-top:12px;animation:pick .35s ease}
+@keyframes pick{0%{transform:scale(.98)}100%{transform:none}}
+.p-label{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--primary)}
+.p-desc{font-weight:800;font-size:17px;overflow-wrap:anywhere;margin-top:2px}
+.p-code{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2px}
+.pr-prices{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:10px;margin-top:12px}
+@media (max-width:420px){.pr-prices{grid-template-columns:1fr}}
+.pr-box{background:var(--surface);border:1.5px solid var(--border);border-radius:16px;padding:10px 12px;min-width:0;display:block}
+.pr-box>span{display:block;font-size:12px;font-weight:700;color:var(--muted)}
+.pr-box>b{display:block;font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1.25;font-variant-numeric:tabular-nums}
+.pr-box.new{border:2px solid var(--primary)}
+.pr-box input{width:100%;border:0;background:transparent;outline:none;font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1.25;padding:0;font-variant-numeric:tabular-nums;color:var(--primary)}
+.pr-box input::placeholder{color:var(--muted);opacity:.45}
+.pr-diff{font-size:12.5px;font-weight:700;min-height:18px;margin-top:2px}
+.pr-diff.up{color:var(--success)} .pr-diff.down{color:var(--danger)}
+.pr-quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.pr-quick button{border:1.5px solid var(--border);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.pr-quick button:hover{border-color:var(--primary);color:var(--primary)}
+.pr-cod{margin-top:12px;padding-top:12px;border-top:1.5px dashed color-mix(in srgb,var(--primary) 35%,var(--border))}
+.pr-cod-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pr-cod-row .grow{flex:1 1 160px;min-width:0}
+.pr-cod-row span{display:block;font-size:12px;font-weight:700;color:var(--muted)}
+.pr-cod-row b{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.pr-cod-form{margin-top:10px}
+.pr-cod-form .searchbar{background:var(--surface)}
+.pr-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.empty{text-align:center;padding:26px 12px;color:var(--muted)}
+.empty .big{width:54px;height:54px;border-radius:18px;margin:0 auto 10px;display:grid;place-items:center;background:var(--primary-soft);color:var(--primary)}
+.empty .big .ic{width:26px;height:26px}
+.empty b{display:block;color:var(--text);font-size:15px;margin-bottom:4px}
+.empty p{margin:0 0 12px;font-size:13px}
+
+/* Enviados */
 .env-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 .env{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:14px;background:var(--surface-2)}
 .env .grow{flex:1;min-width:0}
 .e-desc{font-weight:700;font-size:14px;overflow-wrap:anywhere}
+.e-tipo{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--primary);background:var(--primary-soft);border-radius:6px;padding:1px 6px;margin-right:6px;vertical-align:1px}
 .e-sub{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .e-msg{font-size:12px;margin-top:2px}
 .e-msg.err{color:var(--danger)} .e-msg.warn{color:var(--warn)} .e-msg.ok{color:var(--success)}
 .env-right{display:grid;justify-items:end;gap:4px}
-.e-price{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:14px}
+.e-price{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:14px;text-align:right}
+.e-price s{color:var(--muted);font-weight:600;font-size:12px}
 .e-btns{display:flex;gap:10px;margin-top:2px}
 .e-btns button{border:0;background:transparent;color:var(--primary);font-weight:700;font-size:12.5px;padding:4px 0}
 .pill{font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;white-space:nowrap}
@@ -144,7 +204,7 @@ h2 .ic{color:var(--primary)}
 .pill.wait{background:var(--warn-soft);color:var(--warn)}
 .pill.wait::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;animation:blink 1.1s infinite}
 @keyframes blink{50%{opacity:.25}}
-.empty{text-align:center;padding:24px 12px;color:var(--muted);font-size:13px}
+.env-vacio{text-align:center;padding:24px 12px;color:var(--muted);font-size:13px}
 
 /* Escáner */
 dialog{border:0;padding:0;background:transparent;color:var(--text);max-width:100vw;max-height:100vh}
@@ -163,16 +223,20 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
 .toast{pointer-events:auto;display:flex;align-items:center;gap:10px;background:#111827;color:#f9fafb;border-radius:14px;padding:11px 14px;box-shadow:0 14px 30px -10px rgba(0,0,0,.5);font-size:14px;animation:tin .22s ease}
 .toast.ok{border-left:4px solid #34d399}.toast.warn{border-left:4px solid #fbbf24}.toast.err{border-left:4px solid #f87171}
 @keyframes tin{from{opacity:0;transform:translateY(8px)}}
-@media (prefers-reduced-motion:reduce){.toast{animation:none}.pill.wait::before{animation:none}}
+@media (prefers-reduced-motion:reduce){.toast,.pr-card{animation:none}.pill.wait::before{animation:none}}
 </style>
 </head>
 <body>
 <header class="hero">
   <div class="hero-inner">
     <div class="brand-row">
-      <div class="logo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></div>
+      <div class="logo"><i data-ic="box"></i></div>
       <div class="brand"><h1>Alta Productos</h1><p id="st-lista">Cargando productos de Glop…</p></div>
     </div>
+    <nav class="tabs" role="tablist" aria-label="Opciones">
+      <button type="button" role="tab" data-tab="alta" class="on"><i data-ic="plus"></i>Nuevo producto</button>
+      <button type="button" role="tab" data-tab="precio"><i data-ic="euro"></i>Cambiar precio</button>
+    </nav>
     <div class="stats">
       <div class="stat"><b id="st-hoy">0</b><span>Enviados hoy</span></div>
       <div class="stat"><b id="st-ok">0</b><span>Ya en Glop hoy</span></div>
@@ -182,17 +246,18 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
 </header>
 
 <main class="layout">
-  <section class="card">
-    <div class="card-head"><h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15h6"/></svg>Ficha del producto nuevo</h2></div>
-    <form class="ficha" id="ficha" autocomplete="off" novalidate>
-      <div class="auth" id="auth" hidden><span>Hay que volver a entrar en Google para enviar las altas.</span><button class="btn" type="button" id="auth-btn">Conectar con Google</button></div>
+  <div class="auth" id="auth" hidden><span>Hay que volver a entrar en Google para enviar los cambios y ver si ya están en Glop.</span><button class="btn" type="button" id="auth-btn">Conectar con Google</button></div>
 
+  <!-- Nuevo producto -->
+  <section class="card" id="tab-alta">
+    <div class="card-head"><h2><i data-ic="filePlus"></i>Ficha del producto nuevo</h2></div>
+    <form class="ficha" id="ficha" autocomplete="off" novalidate>
       <div class="field" id="f-cod">
         <span>Código de barras (Cod. Barras / Libre)</span>
         <div class="searchbar">
-          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6v12M8 6v12M11 6v12M15 6v12M18 6v12M21 6v12"/></svg>
+          <i data-ic="barcode"></i>
           <input id="a-cod" inputmode="numeric" enterkeyhint="next" placeholder="Escanea o escribe el código" aria-label="Código de barras">
-          <button class="scan-btn" type="button" id="btn-scan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M14 8v8M17 8v8"/></svg><span>Escanear</span></button>
+          <button class="scan-btn" type="button" id="btn-scan"><i data-ic="scan"></i><span>Escanear</span></button>
         </div>
         <div class="msg" id="m-cod"></div>
       </div>
@@ -230,24 +295,38 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
       </div>
 
       <div class="actions">
-        <button class="btn btn-primary" type="submit" id="btn-alta"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Dar de alta en Glop</button>
+        <button class="btn btn-primary" type="submit" id="btn-alta"><i data-ic="check"></i>Dar de alta en Glop</button>
         <button class="btn btn-ghost" type="button" id="btn-limpiar">Borrar ficha</button>
       </div>
       <p class="note">El ordenador de la tienda lo crea en Glop en unos segundos y aquí sale el código que le ha puesto Glop. La familia se queda elegida para el siguiente producto.</p>
     </form>
   </section>
 
+  <!-- Cambiar precio (lo mismo que Precios de venta) -->
+  <section class="card" id="tab-precio" hidden>
+    <div class="card-head"><h2><i data-ic="euro"></i>Cambiar precio o código</h2></div>
+    <div class="searchbar">
+      <i data-ic="search"></i>
+      <input id="pr-search" type="search" placeholder="Escanea o busca el producto…" autocomplete="off" enterkeyhint="search" aria-label="Buscar producto para cambiar el precio">
+      <button class="scan-btn" type="button" id="pr-scan"><i data-ic="scan"></i><span>Escanear</span></button>
+    </div>
+    <div class="pr-card" id="pr-card" hidden></div>
+    <div class="res-meta"><span id="pr-count"></span><span class="kbd-hint">Lector de códigos o Intro = elegir directo</span></div>
+    <div id="pr-results"></div>
+  </section>
+
   <section class="card pane-env">
-    <div class="card-head"><h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>Altas enviadas</h2></div>
+    <div class="card-head"><h2><i data-ic="history"></i><span id="env-titulo">Altas enviadas</span></h2></div>
     <ul class="env-list" id="env"></ul>
+    <ul class="env-list" id="pr-env" hidden></ul>
   </section>
 </main>
 
 <dialog class="scan-dlg" id="dlg-scan">
   <div class="scan-inner">
-    <div class="scan-top"><b>Escanear código de barras</b><button class="icon-btn" type="button" id="scan-close" aria-label="Cerrar"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <div class="scan-top"><b>Escanear código de barras</b><button class="icon-btn" type="button" id="scan-close" aria-label="Cerrar"><i data-ic="x"></i></button></div>
     <div id="reader"></div>
-    <div class="scan-status" id="scan-status">Apunta la cámara al código de barras del producto nuevo</div>
+    <div class="scan-status" id="scan-status"></div>
   </div>
 </dialog>
 
@@ -260,15 +339,45 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const stripZeros = c => String(c).replace(/^0+/, '');
 const fmtN = n => Number(n).toLocaleString('es-ES');
+const plural = (n, a, b) => `${fmtN(n)} ${n === 1 ? a : b}`;
 const euro = v => (v == null || v === '' || isNaN(v)) ? '—' : Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 const parsePrecio = s => { const t = String(s ?? '').replace(/€|\s/g, '').replace(',', '.'); return /^\d{1,4}(\.\d{1,3})?$/.test(t) ? Number(t) : null; };
+const round2 = n => Math.round(n * 100) / 100;
 const isToday = t => new Date(t).toDateString() === new Date().toDateString();
+const tactil = () => matchMedia('(pointer:coarse)').matches;
 const store = {
   get(k, fb) { try { const v = localStorage.getItem(k); return v == null ? fb : JSON.parse(v); } catch { return fb; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
 // Texto como lo guarda Glop: mayúsculas y sin espacios dobles (el ordenador lo vuelve a limpiar)
 const glopTxt = s => String(s ?? '').toUpperCase().replace(/\s+/g, ' ').trim();
+
+const IC = {
+  box: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  euro: '<path d="M18.5 6.5A7 7 0 1 0 18.5 17.5"/><path d="M4 10h10M4 14h9"/>',
+  filePlus: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15h6"/>',
+  barcode: '<path d="M4 6v12M8 6v12M11 6v12M15 6v12M18 6v12M21 6v12"/>',
+  scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M14 8v8M17 8v8"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>'
+};
+const icon = n => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n] || ''}</svg>`;
+const emptyBlock = (ic, title, text, btn = '') => `<div class="empty"><div class="big">${icon(ic)}</div><b>${esc(title)}</b><p>${text}</p>${btn}</div>`;
+function highlight(text, tokens) {
+  if (!tokens.length) return esc(text);
+  const low = norm(text), ranges = [];
+  for (const t of tokens) { let from = 0, i; while (t && (i = low.indexOf(t, from)) !== -1) { ranges.push([i, i + t.length]); from = i + t.length; } }
+  if (!ranges.length) return esc(text);
+  ranges.sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const r of ranges) { const m = merged[merged.length - 1]; if (m && r[0] <= m[1]) m[1] = Math.max(m[1], r[1]); else merged.push([...r]); }
+  let out = '', pos = 0;
+  for (const [a, b] of merged) { out += esc(text.slice(pos, a)) + '<mark>' + esc(text.slice(a, b)) + '</mark>'; pos = b; }
+  return out + esc(text.slice(pos));
+}
 
 function toast(msg, { type = '', timeout = 4000 } = {}) {
   const box = $('#toasts');
@@ -290,40 +399,82 @@ function beep(ok = true) {
   if (navigator.vibrate) navigator.vibrate(ok ? 40 : [90, 60, 90]);
 }
 
-/* ---------- Productos y familias de Glop (pvp.json: [descripción, código, otro código, pvp, iva, familia]) ---------- */
+/* ---------- Estado ---------- */
 const FOLDER = 'CAMBIOS PRECIO';
 const KA = { env: 'pt_altas_enviadas', fam: 'pt_altas_familia' };
-const A = { rows: [], byCode: new Map(), byName: new Map(), fams: [], loaded: false, listed: 0, env: [], timer: null, needAuth: false, iva: null, ivaAuto: false };
+// Las mismas claves que "Precios de venta" de v2.html: las dos apps comparten los cambios enviados
+const KP = { env: 'pt_precios_enviados', over: 'pt_precios_cambiados' };
+const A = { tab: 'alta', rows: [], byCode: new Map(), byName: new Map(), fams: [], loaded: false, listed: 0, env: [], timer: null, needAuth: false, iva: null, ivaAuto: false };
+const PR = { sel: null, results: [], tokens: [], env: [], over: {}, timer: null };
+const prKey = (d, c) => (c ? 'c:' + stripZeros(c) : '') + '|d:' + norm(d);
 
+/* ---------- Productos de Glop (pvp.json: [descripción, código, otro código, pvp, iva, familia]) ---------- */
 async function cargarGlop() {
   try {
     const res = await fetch('pvp.json?_=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     A.listed = Date.parse(res.headers.get('Last-Modified') || '') || 0;
-    A.rows = data.filter(r => Array.isArray(r) && r[0]).map(r => ({ d: String(r[0]).trim(), c: String(r[1] || ''), o: String(r[2] || ''), pvp: Number(r[3]), iva: Number(r[4]), fam: String(r[5] || '') }));
-    A.byCode = new Map(); A.byName = new Map();
-    const fams = new Map();
+    // Los cambios de precio hechos aquí se recuerdan hasta que llegan a pvp.json (se publica cada hora)
+    const caduca = A.listed || Date.now() - 75 * 60000;
+    for (const [k, o] of Object.entries(PR.over)) if (o.t < caduca) delete PR.over[k];
+    store.set(KP.over, PR.over);
+    A.rows = data.filter(r => Array.isArray(r) && r[0]).map(r => ({ d: String(r[0]), c: String(r[1] || ''), o: String(r[2] || ''), pvp: Number(r[3]), iva: r[4], fam: String(r[5] || '') }));
     for (const r of A.rows) {
-      for (const c of [r.c, r.o]) if (c) for (const k of [c, stripZeros(c)]) if (k && !A.byCode.has(k)) A.byCode.set(k, r);
-      A.byName.set(glopTxt(r.d), r);
-      if (!r.fam) continue;
-      const f = fams.get(r.fam) || { name: r.fam, n: 0, ivas: {} };
-      f.n++; if (r.iva) f.ivas[r.iva] = (f.ivas[r.iva] || 0) + 1;
-      fams.set(r.fam, f);
+      const ov = PR.over[prKey(r.d, r.c)]; if (ov) r.pvp = ov.pvp;
+      const oc = PR.over['cod:' + prKey(r.d, r.c)]; if (oc) r.c = oc.c;
     }
-    // IVA de cada familia: el que tienen la mayoría de sus productos
-    A.fams = [...fams.values()].map(f => ({ ...f, iva: Number(Object.entries(f.ivas).sort((a, b) => b[1] - a[1])[0]?.[0]) || null }))
-      .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    // Productos dados de alta desde aquí que todavía no están en pvp.json
+    for (const e of A.env) if (e.estado === 'hecho') filaDeAlta(e);
+    indexar();
     A.loaded = true;
     pintarFamilias();
     $('#st-lista').textContent = `${fmtN(A.rows.length)} productos en Glop` + (A.listed ? ` · lista de las ${new Date(A.listed).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}` : ' · la lista se actualiza cada hora');
-    revisarCodigo(); revisarNombre();
+    revisarCodigo(); revisarNombre(); prSearch(); if (PR.sel) prSelect(PR.sel);
   } catch (e) {
     $('#st-lista').textContent = 'No se pudo cargar la lista de Glop (' + e.message + ')';
-    toast('Sin lista de productos: no se podrán avisar los códigos repetidos.', { type: 'warn', timeout: 7000 });
+    toast('Sin lista de productos de Glop: comprueba la conexión a internet.', { type: 'warn', timeout: 7000 });
+    prSearch();
   }
 }
+function filaDeAlta(e) {
+  const d = e.glop?.descripcion || e.d;
+  if (A.rows.some(r => glopTxt(r.d) === glopTxt(d))) return;
+  A.rows.push({ d, c: e.glop?.codigo ?? e.c ?? '', o: '', pvp: Number(e.glop?.pvp ?? e.pvp), iva: e.iva, fam: e.fam });
+}
+function indexar() {
+  A.byCode = new Map(); A.byName = new Map();
+  const fams = new Map();
+  A.rows.forEach((r, i) => {
+    r.i = i; r.n = norm(r.d);
+    for (const c of [r.c, r.o]) if (c) for (const k of [c, stripZeros(c)]) if (k && !A.byCode.has(k)) A.byCode.set(k, r);
+    A.byName.set(glopTxt(r.d), r);
+    if (!r.fam) return;
+    const f = fams.get(r.fam) || { name: r.fam, n: 0, ivas: {} };
+    f.n++; if (r.iva) f.ivas[r.iva] = (f.ivas[r.iva] || 0) + 1;
+    fams.set(r.fam, f);
+  });
+  // IVA de cada familia: el que tienen la mayoría de sus productos
+  A.fams = [...fams.values()].map(f => ({ ...f, iva: Number(Object.entries(f.ivas).sort((a, b) => b[1] - a[1])[0]?.[0]) || null }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+}
+const porCodigo = c => { c = String(c).trim(); return c ? A.byCode.get(c) || A.byCode.get(stripZeros(c)) || null : null; };
+
+/* ---------- Opciones: nuevo producto / cambiar precio ---------- */
+function verTab(t, foco = true) {
+  A.tab = t;
+  document.querySelectorAll('.tabs [data-tab]').forEach(b => { const on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+  $('#tab-alta').hidden = t !== 'alta'; $('#tab-precio').hidden = t !== 'precio';
+  $('#env').hidden = t !== 'alta'; $('#pr-env').hidden = t !== 'precio';
+  $('#env-titulo').textContent = t === 'alta' ? 'Altas enviadas' : 'Cambios de precio enviados';
+  document.title = t === 'alta' ? 'Alta Productos' : 'Cambiar precio · Alta Productos';
+  history.replaceState(null, '', t === 'precio' ? '#precio' : location.pathname + location.search);
+  pintarStats();
+  if (foco && !tactil()) (t === 'alta' ? $('#a-cod') : PR.sel ? $('#pr-new') : $('#pr-search')).focus();
+}
+
+/* ---------- Nuevo producto ---------- */
+const val = id => $(id).value.trim();
 function pintarFamilias() {
   const sel = $('#a-fam'), actual = sel.value || store.get(KA.fam, '');
   sel.innerHTML = '<option value="">Elige la familia…</option>' + A.fams.map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join('');
@@ -331,27 +482,25 @@ function pintarFamilias() {
 }
 const famInfo = name => A.fams.find(f => f.name === name) || null;
 
-/* ---------- Ficha ---------- */
-const val = id => $(id).value.trim();
-
-// Altas de esta tablet que ya están (o van camino de estar) en Glop: cuentan como repetidas
+// Altas de este aparato que ya están (o van camino de estar) en Glop: cuentan como repetidas
 const altasVivas = () => A.env.filter(e => e.estado === 'hecho' || e.estado === 'esperando' || e.estado === 'enviando');
 
 // null si el código vale; si no, el texto del problema
 function problemaCodigo(c) {
   if (!c) return null;
   if (!/^[0-9A-Za-z]{3,30}$/.test(c)) return 'El código tiene que tener entre 3 y 30 números o letras, sin espacios';
-  const r = A.byCode.get(c) || A.byCode.get(stripZeros(c));
-  if (r) return `Ya existe en Glop: ${r.d} · ${euro(r.pvp)}`;
+  const r = porCodigo(c);
+  if (r) return `Ya existe en Glop: ${r.d.trim()} · ${euro(r.pvp)}`;
   const e = altasVivas().find(x => x.c && stripZeros(x.c) === stripZeros(c));
   if (e) return `Ya lo has dado de alta: ${e.glop?.descripcion || e.d}`;
   return null;
 }
 function revisarCodigo() {
-  const c = val('#a-cod'), p = problemaCodigo(c), m = $('#m-cod');
+  const c = val('#a-cod'), p = problemaCodigo(c), m = $('#m-cod'), r = p && porCodigo(c);
   $('#f-cod').classList.toggle('bad', !!p);
   m.className = 'msg' + (p ? ' err' : c ? ' ok' : '');
-  m.textContent = p || (c ? (A.loaded ? '✓ Código libre: no está en Glop' : '') : 'Se puede dar de alta sin código, pero en caja habrá que buscarlo por el nombre');
+  m.innerHTML = p ? esc(p) + (r ? ` <button type="button" class="link" data-ir-precio="${r.i}">Cambiar su precio</button>` : '')
+    : esc(c ? (A.loaded ? '✓ Código libre: no está en Glop' : '') : 'Se puede dar de alta sin código, pero en caja habrá que buscarlo por el nombre');
   return p;
 }
 function problemaNombre(d) {
@@ -359,8 +508,7 @@ function problemaNombre(d) {
   if (d.length < 3) return 'La descripción es demasiado corta';
   const r = A.byName.get(d);
   if (r) return `Ya hay un producto con ese nombre en Glop${r.c ? ' (código ' + r.c + ')' : ''} · ${euro(r.pvp)}`;
-  const e = altasVivas().find(x => glopTxt(x.d) === d);
-  if (e) return 'Ya lo has dado de alta con ese nombre';
+  if (altasVivas().some(x => glopTxt(x.d) === d)) return 'Ya lo has dado de alta con ese nombre';
   return null;
 }
 function revisarNombre(mostrarVacio = false) {
@@ -415,49 +563,54 @@ function enviarAlta(ev) {
   if (pp) return $('#a-pvp').focus();
   const resumen = [d, dp && dp !== d ? `Descripción pedidos: ${dp}` : '', `Código de barras: ${c || '(sin código)'}`, `Familia: ${fam}`, `IVA: ${A.iva} %`, `Precio de venta: ${euro(n)}`].filter(Boolean).join('\n');
   if (!confirm(`¿Dar de alta en Glop este producto?\n\n${resumen}`)) return;
-  const ent = { k: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: Date.now(), d, dp, c, fam, iva: A.iva, pvp: Math.round(n * 100) / 100, estado: 'enviando' };
+  const ent = { k: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: Date.now(), d, dp, c, fam, iva: A.iva, pvp: round2(n), estado: 'enviando' };
   A.env.unshift(ent); guardarEnv(); pintarEnv();
-  limpiarFicha(!matchMedia('(pointer:coarse)').matches);
-  subir(ent, true);
+  limpiarFicha(!tactil());
+  subirAlta(ent, true);
 }
 
-/* ---------- Envío por Google Drive y respuesta del ordenador ---------- */
 function guardarEnv() { A.env = A.env.slice(0, 80); store.set(KA.env, A.env); }
+const sello = t => new Date(t).toISOString().replace(/\D/g, '').slice(0, 14);
+async function prepararDrive(interactive) {
+  if (!window.DrivePedidos || !DrivePedidos.status().configured) throw new Error('Google Drive no está configurado en esta app');
+  if (!DrivePedidos.status().connected) throw new Error('Google Drive está desconectado: conéctalo en Pedidos 2.0 → Ajustes');
+  await DrivePedidos.ensure(interactive);
+  A.needAuth = false; barraAuth();
+}
+function falloEnvio(ent, e) {
+  ent.estado = 'no-enviado'; ent.msg = e.message;
+  if (/caducada|cerrada|permiso/i.test(e.message)) { A.needAuth = true; barraAuth(); }
+  toast('No se pudo enviar: ' + e.message, { type: 'err', timeout: 7000 });
+}
 
-async function subir(ent, interactive) {
+async function subirAlta(ent, interactive) {
   ent.estado = 'enviando'; ent.msg = ''; guardarEnv(); pintarEnv();
   try {
-    if (!window.DrivePedidos || !DrivePedidos.status().configured) throw new Error('Google Drive no está configurado en esta app');
-    if (!DrivePedidos.status().connected) throw new Error('Google Drive está desconectado: conéctalo en Pedidos 2.0 → Ajustes');
-    await DrivePedidos.ensure(interactive);
-    A.needAuth = false; barraAuth();
-    const stamp = new Date(ent.t).toISOString().replace(/\D/g, '').slice(0, 14);
-    const datos = { version: 1, tipo: 'alta-articulo', estado: 'pendiente', creado: new Date(ent.t).toISOString(), dispositivo: matchMedia('(pointer:coarse)').matches ? 'tablet' : 'ordenador',
+    await prepararDrive(interactive);
+    const datos = { version: 1, tipo: 'alta-articulo', estado: 'pendiente', creado: new Date(ent.t).toISOString(), dispositivo: tactil() ? 'tablet' : 'ordenador',
                     clave: ent.k, descripcion: ent.d, descripcionPedidos: ent.dp || '', codigo: ent.c || '', familia: ent.fam, iva: String(ent.iva), pvp: ent.pvp.toFixed(2) };
-    ent.driveId = await DrivePedidos.uploadJson(FOLDER, `alta-${stamp}-${ent.k}.json`, datos);
+    ent.driveId = await DrivePedidos.uploadJson(FOLDER, `alta-${sello(ent.t)}-${ent.k}.json`, datos);
     ent.estado = 'esperando'; ent.enviado = Date.now();
     toast(`Enviado: ${ent.d}`, { type: 'ok' });
-    pollPronto(5000);
-  } catch (e) {
-    ent.estado = 'no-enviado'; ent.msg = e.message;
-    if (/caducada|cerrada|permiso/i.test(e.message)) { A.needAuth = true; barraAuth(); }
-    toast('No se pudo enviar: ' + e.message, { type: 'err', timeout: 7000 });
-  } finally { guardarEnv(); pintarEnv(); }
+    pollAltas(5000);
+  } catch (e) { falloEnvio(ent, e); }
+  finally { guardarEnv(); pintarEnv(); }
 }
 
-function pollPronto(ms = 6000) { clearTimeout(A.timer); A.timer = setTimeout(poll, ms); }
-async function poll() {
+function pollAltas(ms = 6000) { clearTimeout(A.timer); A.timer = setTimeout(leerAltas, ms); }
+async function leerAltas() {
   const wait = A.env.filter(e => e.estado === 'esperando' && e.driveId);
   if (!wait.length || !window.DrivePedidos) return;
   try { await DrivePedidos.ensure(false); A.needAuth = false; }
   catch { A.needAuth = true; barraAuth(); pintarEnv(); return; }   // se sigue al reconectar
   barraAuth();
+  let nuevas = false;
   for (const e of wait) {
     try {
       const r = await DrivePedidos.readJson(e.driveId);
       if (r && (r.estado === 'hecho' || r.estado === 'error')) {
         Object.assign(e, { estado: r.estado, msg: r.mensaje || '', glop: r.glop || null, hecho: Date.now() });
-        if (r.estado === 'hecho') toast(`✓ Ya en Glop: ${e.d}${r.glop?.id ? ' (código ' + r.glop.id + ')' : ''}`, { type: 'ok', timeout: 6000 });
+        if (r.estado === 'hecho') { filaDeAlta(e); nuevas = true; toast(`✓ Ya en Glop: ${e.d}${r.glop?.id ? ' (código ' + r.glop.id + ')' : ''}`, { type: 'ok', timeout: 6000 }); }
         else toast(`No se dio de alta ${e.d}: ${e.msg}`, { type: 'err', timeout: 9000 });
       }
     } catch (err) {
@@ -465,33 +618,39 @@ async function poll() {
       if (/ 404/.test(err.message)) Object.assign(e, { estado: 'error', msg: 'El aviso ya no está en Google Drive' });
     }
   }
+  if (nuevas) { indexar(); prSearch(); }
   guardarEnv(); pintarEnv(); revisarCodigo(); revisarNombre();
-  if (!A.needAuth && A.env.some(e => e.estado === 'esperando')) pollPronto(document.hidden ? 30000 : 6000);
+  if (!A.needAuth && A.env.some(e => e.estado === 'esperando')) pollAltas(document.hidden ? 30000 : 6000);
 }
 function barraAuth() { $('#auth').hidden = !A.needAuth; }
 
 const ESTADO = {
   enviando: ['wait', 'Enviando'], esperando: ['wait', 'Esperando al ordenador'], hecho: ['ok', '✓ En Glop'],
-  error: ['err', 'No se dio de alta'], 'no-enviado': ['err', 'Sin enviar']
+  error: ['err', 'No se hizo'], 'no-enviado': ['err', 'Sin enviar']
 };
+const horaDe = t => { const w = new Date(t); return (isToday(t) ? '' : w.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ') + w.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }); };
+const lento = e => e.estado === 'esperando' && Date.now() - (e.enviado || e.t) > 10 * 60000;
+const MSG_LENTO = 'Tarda más de lo normal: ¿está encendido el ordenador de la tienda? Se hará en cuanto lo esté.';
+
+function pintarStats() {
+  const l = [...A.env, ...PR.env];
+  $('#st-hoy').textContent = fmtN(l.filter(e => isToday(e.t)).length);
+  $('#st-ok').textContent = fmtN(l.filter(e => e.estado === 'hecho' && isToday(e.t)).length);
+  $('#st-pend').textContent = fmtN(l.filter(e => e.estado === 'enviando' || e.estado === 'esperando').length);
+}
 function pintarEnv() {
-  const list = A.env;
-  $('#st-hoy').textContent = fmtN(list.filter(e => isToday(e.t)).length);
-  $('#st-ok').textContent = fmtN(list.filter(e => e.estado === 'hecho' && isToday(e.t)).length);
-  $('#st-pend').textContent = fmtN(list.filter(e => e.estado === 'enviando' || e.estado === 'esperando').length);
-  const box = $('#env');
-  if (!list.length) { box.innerHTML = '<li class="empty">Todavía no has dado de alta ningún producto desde aquí.</li>'; return; }
+  pintarStats();
+  const list = A.env, box = $('#env');
+  if (!list.length) { box.innerHTML = '<li class="env-vacio">Todavía no has dado de alta ningún producto desde aquí.</li>'; return; }
   box.innerHTML = list.slice(0, 40).map((e, i) => {
-    const [cls, txt] = ESTADO[e.estado] || ['', e.estado];
-    const when = new Date(e.t);
-    const hora = (isToday(e.t) ? '' : when.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ') + when.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    const [cls, txt] = e.estado === 'error' ? ['err', 'No se dio de alta'] : ESTADO[e.estado] || ['', e.estado];
     let msg = e.msg || '', mcls = e.estado === 'hecho' ? 'warn' : 'err';
     if (e.estado === 'hecho' && e.glop?.id && !msg) { msg = `Código en Glop: ${e.glop.id}`; mcls = 'ok'; }
-    if (e.estado === 'esperando' && Date.now() - (e.enviado || e.t) > 10 * 60000) { msg = 'Tarda más de lo normal: ¿está encendido el ordenador de la tienda? Se hará en cuanto lo esté.'; mcls = 'warn'; }
+    if (lento(e)) { msg = MSG_LENTO; mcls = 'warn'; }
     const btns = [e.estado === 'no-enviado' ? `<button type="button" data-retry="${i}">Reintentar</button>` : '',
                   e.estado === 'error' || e.estado === 'no-enviado' ? `<button type="button" data-edit="${i}">Corregir en la ficha</button>` : ''].join('');
     return `<li class="env"><div class="grow"><div class="e-desc">${esc(e.glop?.descripcion || e.d)}</div>
-      <div class="e-sub">${hora}${e.c ? ' · ' + esc(e.c) : ' · sin código'} · ${esc(e.fam)} · IVA ${e.iva} %</div>
+      <div class="e-sub">${horaDe(e.t)}${e.c ? ' · ' + esc(e.c) : ' · sin código'} · ${esc(e.fam)} · IVA ${e.iva} %</div>
       ${msg ? `<div class="e-msg ${mcls}">${esc(msg)}</div>` : ''}${btns ? `<div class="e-btns">${btns}</div>` : ''}</div>
       <div class="env-right"><span class="pill ${cls}">${txt}</span><div class="e-price">${euro(e.pvp)}</div></div></li>`;
   }).join('');
@@ -507,29 +666,7 @@ function corregir(e) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
   $('#a-desc').focus();
 }
-
-/* ---------- Escáner (cámara) ---------- */
-let scanner = null;
-async function abrirEscaner() {
-  if (!window.Html5Qrcode) return toast('No se pudo cargar el escáner (¿sin conexión?).', { type: 'err' });
-  $('#scan-status').textContent = 'Apunta la cámara al código de barras del producto nuevo';
-  $('#dlg-scan').showModal();
-  try {
-    const F = window.Html5QrcodeSupportedFormats;
-    scanner = new Html5Qrcode('reader', { verbose: false, useBarCodeDetectorIfSupported: true,
-      formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.ITF] });
-    await scanner.start({ facingMode: 'environment' },
-      { fps: 12, qrbox: (w, h) => ({ width: Math.floor(w * 0.86), height: Math.max(80, Math.floor(Math.min(h * 0.5, w * 0.42))) }) },
-      text => { $('#dlg-scan').close(); ponerCodigo(text); }, () => {});
-  } catch (e) {
-    $('#scan-status').textContent = 'No se pudo abrir la cámara. Revisa que el navegador tenga permiso.';
-  }
-}
-async function pararEscaner() {
-  const s = scanner; scanner = null;
-  if (s) { try { if (s.isScanning) await s.stop(); s.clear(); } catch {} }
-}
-// Código leído (cámara o lector): si ya existe se avisa; si no, se pasa a la descripción
+// Código leído (cámara o lector) en la ficha: si ya existe se avisa; si no, se pasa a la descripción
 function ponerCodigo(text) {
   $('#a-cod').value = String(text).trim();
   const p = revisarCodigo();
@@ -538,16 +675,309 @@ function ponerCodigo(text) {
   $('#a-desc').focus();
 }
 
-/* ---------- Arranque ---------- */
-function init() {
-  A.env = store.get(KA.env, []);
-  // Si la app se cerró mientras se enviaba un alta, queda para reintentar
-  A.env.forEach(e => { if (e.estado === 'enviando') Object.assign(e, { estado: 'no-enviado', msg: 'Se cerró la app antes de enviarla' }); });
-  guardarEnv(); pintarEnv(); revisarCodigo(); revisarNombre();
+/* ---------- Cambiar precio (como "Precios de venta" de Pedidos 2.0) ---------- */
+// Se mezclan con lo que haya guardado Pedidos 2.0 (misma clave) para no pisar sus cambios
+function prSaveEnv() {
+  const mios = new Set(PR.env.map(e => e.k));
+  const otros = store.get(KP.env, []).filter(e => e && !mios.has(e.k));
+  PR.env = [...PR.env, ...otros].sort((a, b) => b.t - a.t).slice(0, 60);
+  store.set(KP.env, PR.env);
+}
 
+function prRow(r) {
+  return `<li class="res${PR.sel === r ? ' pr-sel' : ''}" data-pr="${r.i}">
+    <div class="res-main"><div class="res-desc">${highlight(r.d, PR.tokens)}</div>
+    <div class="res-code">${r.c ? icon('barcode') + esc(r.c) : '<i>sin código</i>'}${r.fam ? ' · ' + esc(r.fam) : ''}</div></div>
+    <span class="pr-pvp">${euro(r.pvp)}</span></li>`;
+}
+function prSearch() {
+  const q = $('#pr-search').value.trim(), box = $('#pr-results');
+  PR.tokens = norm(q).split(/\s+/).filter(Boolean);
+  PR.results = [];
+  $('#pr-count').textContent = '';
+  if (!A.loaded) { box.innerHTML = emptyBlock('euro', 'Cargando la lista de precios…', 'Un momento.'); return; }
+  if (!q) {
+    box.innerHTML = PR.sel ? '' : emptyBlock('euro', 'Escanea o busca un producto', 'Pasa el código por el lector, pulsa Escanear o escribe parte del nombre. El precio nuevo se cambia solo en Glop.');
+    return;
+  }
+  const digits = /^\d+$/.test(q);
+  if (!digits && norm(q).length < 2) { box.innerHTML = emptyBlock('search', 'Sigue escribiendo…', 'Escribe al menos 2 letras.'); return; }
+  const qn = norm(q), qz = stripZeros(qn), res = [];
+  for (const r of A.rows) {
+    let s = -1;
+    if (digits) for (const c of [r.c, r.o]) {
+      if (!c) continue;
+      if (c === qn || (qz && stripZeros(c) === qz)) s = 0;
+      else if (s < 0 && qn.length >= 4 && c.includes(qn)) s = 1;
+    }
+    if (s < 0 && PR.tokens.every(t => r.n.includes(t))) s = r.n.startsWith(PR.tokens[0]) ? 2 : 3;
+    if (s >= 0) res.push([s, r]);
+  }
+  res.sort((a, b) => a[0] - b[0] || a[1].d.localeCompare(b[1].d, 'es'));
+  PR.results = res.slice(0, 80).map(x => x[1]);
+  if (!PR.results.length) {
+    // Un código que no está en Glop: se puede dar de alta desde aquí mismo
+    const alta = digits && /^[0-9A-Za-z]{3,30}$/.test(q) ? `<button class="btn" type="button" data-alta-cod="${esc(q)}">${icon('plus')}Darlo de alta con este código</button>` : '';
+    box.innerHTML = emptyBlock('search', `Sin resultados para «${q}»`, digits ? 'Ese código no está en Glop.' : 'Prueba con otra palabra.', alta);
+    return;
+  }
+  $('#pr-count').textContent = res.length > PR.results.length ? `Mostrando ${PR.results.length} de ${fmtN(res.length)} resultados` : plural(res.length, 'resultado', 'resultados');
+  box.innerHTML = `<ul class="res-list">${PR.results.map(prRow).join('')}</ul>`;
+}
+
+function prSelect(r) {
+  PR.sel = r;
+  $('#pr-search').value = '';
+  prSearch();
+  const enCamino = PR.env.filter(e => (e.estado === 'esperando' || e.estado === 'enviando') && prKey(e.d, e.c) === prKey(r.d, r.c));
+  const pendP = enCamino.find(e => e.tipo === 'articulo' ? e.nuevo != null : e.tipo !== 'codigo');
+  const pendC = enCamino.find(e => e.tipo === 'articulo' ? !!e.codNuevo : e.tipo === 'codigo');
+  const pendCod = pendC && (pendC.tipo === 'articulo' ? pendC.codNuevo : pendC.nuevo);
+  const info = [r.c && 'Código ' + r.c, r.o && r.o !== r.c && 'Otro código ' + r.o, r.fam, r.iva !== '' && r.iva != null && 'IVA ' + String(r.iva).replace('.', ',') + ' %'].filter(Boolean);
+  const box = $('#pr-card');
+  box.innerHTML = `<div class="p-label">Cambiar precio o código</div><div class="p-desc">${esc(r.d)}</div>
+    <div class="p-code">${info.map(esc).join(' · ')}</div>
+    <div class="pr-prices">
+      <div class="pr-box"><span>Precio actual</span><b>${euro(r.pvp)}</b>${pendP ? `<div class="pr-diff up">En camino: ${euro(pendP.nuevo)}</div>` : ''}</div>
+      <label class="pr-box new"><span>Precio nuevo</span><input id="pr-new" inputmode="decimal" enterkeyhint="send" autocomplete="off" placeholder="${isNaN(r.pvp) ? '0,00' : r.pvp.toFixed(2).replace('.', ',')}"><div class="pr-diff" id="pr-diff"></div></label>
+    </div>
+    <div class="pr-quick">${[-0.10, -0.05, 0.05, 0.10, 0.20, 0.50].map(d => `<button type="button" data-q="${d}">${d > 0 ? '+' : '−'}${Math.abs(d).toFixed(2).replace('.', ',')} €</button>`).join('')}</div>
+    <div class="pr-cod">
+      <div class="pr-cod-row"><div class="grow"><span>Código de barras (Cod. Barras / Libre)</span><b>${r.c ? esc(r.c) : '<i class="muted">sin código</i>'}</b>${pendCod ? `<div class="pr-diff up">En camino: ${esc(pendCod)}</div>` : ''}</div>
+        <button class="btn" type="button" id="pr-cod-edit">${icon('barcode')}Cambiar código</button></div>
+      <div class="pr-cod-form" id="pr-cod-form" hidden>
+        <div class="searchbar"><input id="pr-cod-new" inputmode="numeric" autocomplete="off" enterkeyhint="done" placeholder="Escanea o escribe el código nuevo" aria-label="Código de barras nuevo">
+          <button class="scan-btn" type="button" id="pr-cod-scan">${icon('scan')}<span>Escanear</span></button></div>
+        <div class="pr-diff" id="pr-cod-msg"></div>
+      </div>
+    </div>
+    <div class="pr-actions"><button class="btn btn-primary" type="button" id="pr-send">${icon('check')}<span id="pr-send-txt">Cambiar en Glop</span></button><button class="btn btn-ghost" type="button" id="pr-cancel">Cancelar</button></div>`;
+  box.hidden = false;
+  box.style.animation = 'none'; void box.offsetWidth; box.style.animation = '';
+  prBtnTxt();
+  if (!tactil() || A.tab === 'precio') $('#pr-new').focus();
+}
+function prCloseCard() { PR.sel = null; const b = $('#pr-card'); b.hidden = true; b.innerHTML = ''; prSearch(); }
+
+function prDiff() {
+  const r = PR.sel, el = $('#pr-diff'); if (!r || !el) return;
+  const v = $('#pr-new').value.trim(), n = parsePrecio(v);
+  el.className = 'pr-diff';
+  if (!v) { el.textContent = ''; return; }
+  if (n === null || n <= 0) { el.textContent = 'Escribe el precio con números, p. ej. 1,99'; el.classList.add('down'); return; }
+  if (isNaN(r.pvp) || !r.pvp) { el.textContent = ''; return; }
+  const d = round2(n - r.pvp);
+  if (!d) { el.textContent = 'Es el mismo precio'; return; }
+  el.textContent = `${d > 0 ? '+' : '−'}${euro(Math.abs(d))} (${d > 0 ? '+' : '−'}${Math.abs(d / r.pvp * 100).toLocaleString('es-ES', { maximumFractionDigits: 1 })} %)`;
+  el.classList.add(d > 0 ? 'up' : 'down');
+}
+// Lo que hay escrito en la tarjeta: precio nuevo y/o código nuevo (vacío = no se cambia)
+function prPedido() {
+  const precioTxt = ($('#pr-new')?.value || '').trim();
+  const form = $('#pr-cod-form');
+  const codTxt = form && !form.hidden ? ($('#pr-cod-new')?.value || '').trim() : '';
+  return { precioTxt, codTxt };
+}
+function prBtnTxt() {
+  const t = $('#pr-send-txt'); if (!t) return;
+  const { precioTxt, codTxt } = prPedido();
+  t.textContent = precioTxt && codTxt ? 'Cambiar precio y código en Glop' : codTxt ? 'Cambiar código en Glop' : 'Cambiar precio en Glop';
+}
+// Un solo envío con el precio, el código o los dos (tipo "articulo"): el ordenador busca el artículo una vez y cambia ambos
+function prSend() {
+  const r = PR.sel; if (!r) return;
+  const { precioTxt, codTxt } = prPedido();
+  if (!precioTxt && !codTxt) { const el = $('#pr-diff'); el.textContent = 'Escribe el precio nuevo (o pulsa "Cambiar código")'; el.className = 'pr-diff down'; $('#pr-new').focus(); return; }
+  let n = null;
+  if (precioTxt) {
+    n = parsePrecio(precioTxt);
+    if (n === null || n <= 0 || n >= 10000) { prDiff(); $('#pr-diff').className = 'pr-diff down'; $('#pr-new').focus(); return; }
+    if (!isNaN(r.pvp) && round2(n) === round2(r.pvp)) { $('#pr-diff').textContent = 'Es el mismo precio que ya tiene'; $('#pr-new').focus(); return; }
+  }
+  if (codTxt) {
+    const p = prCodProblem(r, codTxt);
+    if (p) { const el = $('#pr-cod-msg'); el.textContent = p; el.className = 'pr-diff down'; $('#pr-cod-new').focus(); return; }
+  }
+  const lineas = [];
+  if (n !== null) lineas.push(`Precio: ${euro(r.pvp)}  →  ${euro(n)}`);
+  if (codTxt) lineas.push(`Código de barras: ${r.c || '(sin código)'}  →  ${codTxt}\n(el código anterior deja de valer en caja)`);
+  const grande = n !== null && r.pvp > 0 && (n > r.pvp * 2 || n < r.pvp / 2);
+  if ((codTxt || grande) && !confirm(`${grande ? '¿Seguro? El precio cambia mucho.\n\n' : ''}¿Cambiar en Glop ${r.d}?\n\n${lineas.join('\n\n')}`)) { (n !== null ? $('#pr-new') : $('#pr-cod-new')).focus(); return; }
+  const ent = { tipo: 'articulo', k: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: Date.now(), d: r.d, c: r.c, o: r.o,
+                visto: r.pvp, nuevo: n === null ? null : round2(n), codVisto: r.c, codNuevo: codTxt || null, estado: 'enviando' };
+  PR.env.unshift(ent); prSaveEnv(); prRenderEnv();
+  prCloseCard();
+  if (!tactil()) $('#pr-search').focus();
+  prUpload(ent, true);
+}
+
+/* Cambiar el código de barras: va a "Cod. Barras / Libre" de la ficha de Glop y sustituye al que había */
+function prCodOpen() {
+  const f = $('#pr-cod-form'); if (!f) return;
+  f.hidden = false;
+  const i = $('#pr-cod-new'); i.value = ''; $('#pr-cod-msg').textContent = ''; i.focus();
+  prBtnTxt();
+}
+function prCodProblem(r, nc) {
+  if (!nc) return 'Escanea o escribe el código nuevo';
+  if (!/^[0-9A-Za-z]{3,30}$/.test(nc)) return 'El código tiene que tener entre 3 y 30 números o letras, sin espacios';
+  if (r.c && stripZeros(nc) === stripZeros(r.c)) return 'Es el mismo código que ya tiene';
+  const otro = porCodigo(nc);
+  if (otro && prKey(otro.d, otro.c) !== prKey(r.d, r.c)) return `Ese código ya es de otro producto: ${otro.d}`;
+  return null;
+}
+function prCodCheck() {
+  const r = PR.sel, el = $('#pr-cod-msg'); if (!r || !el) return null;
+  const nc = $('#pr-cod-new').value.trim();
+  const p = nc ? prCodProblem(r, nc) : null;
+  el.className = 'pr-diff' + (p ? ' down' : nc ? ' up' : '');
+  el.textContent = p || (nc ? `${r.c || 'sin código'} → ${nc}` : '');
+  return p;
+}
+function prApplyCodigoLocal(e, valor) {
+  const nuevo = String(valor ?? e.ahora ?? '').trim(); if (!nuevo) return;
+  const k = prKey(e.d, e.c);
+  PR.over['cod:' + k] = { c: nuevo, t: Date.now() }; store.set(KP.over, PR.over);   // hasta que llegue a pvp.json
+  for (const r of A.rows) if (prKey(r.d, r.c) === k) {
+    for (const c of [r.c, stripZeros(r.c)]) if (c && A.byCode.get(c) === r) A.byCode.delete(c);
+    r.c = nuevo;
+    for (const c of [nuevo, stripZeros(nuevo)]) if (c) A.byCode.set(c, r);
+  }
+  prSearch();
+}
+function prApplyLocal(e) {
+  const v = Number(e.ahora); if (isNaN(v)) return;
+  const k = prKey(e.d, e.c);
+  PR.over[k] = { pvp: v, t: Date.now() }; store.set(KP.over, PR.over);
+  for (const r of A.rows) if (prKey(r.d, r.c) === k) r.pvp = v;
+  if (PR.sel && prKey(PR.sel.d, PR.sel.c) === k) prSelect(PR.sel); else prSearch();
+}
+
+async function prUpload(ent, interactive) {
+  ent.estado = 'enviando'; ent.msg = ''; prSaveEnv(); prRenderEnv();
+  try {
+    await prepararDrive(interactive);
+    const base = { version: 1, estado: 'pendiente', creado: new Date(ent.t).toISOString(), codigo: ent.c, otro: ent.o, descripcion: ent.d, dispositivo: tactil() ? 'tablet' : 'ordenador' };
+    const visto = ent.visto == null || isNaN(ent.visto) ? '' : Number(ent.visto).toFixed(2);
+    const datos = ent.tipo === 'articulo' ? { tipo: 'cambio-articulo', ...base, visto, nuevo: ent.nuevo == null ? '' : ent.nuevo.toFixed(2), codigoNuevo: ent.codNuevo || '' }
+      : ent.tipo === 'codigo' ? { tipo: 'cambio-codigo', ...base, codigoNuevo: ent.nuevo }
+      : { tipo: 'cambio-precio', ...base, visto, nuevo: ent.nuevo.toFixed(2) };
+    const prefijo = ent.tipo === 'articulo' ? 'articulo' : ent.tipo === 'codigo' ? 'codigo' : 'precio';
+    ent.driveId = await DrivePedidos.uploadJson(FOLDER, `${prefijo}-${sello(ent.t)}-${ent.k}.json`, datos);
+    ent.estado = 'esperando'; ent.enviado = Date.now();
+    toast(`Enviado: ${ent.d}`, { type: 'ok' });
+    prPollSoon(5000);
+  } catch (e) { falloEnvio(ent, e); }
+  finally { prSaveEnv(); prRenderEnv(); }
+}
+
+function prPollSoon(ms = 6000) { clearTimeout(PR.timer); PR.timer = setTimeout(prPoll, ms); }
+async function prPoll() {
+  const wait = PR.env.filter(e => e.estado === 'esperando' && e.driveId);
+  if (!wait.length || !window.DrivePedidos) return;
+  try { await DrivePedidos.ensure(false); A.needAuth = false; }
+  catch { A.needAuth = true; barraAuth(); prRenderEnv(); return; }
+  barraAuth();
+  for (const e of wait) {
+    try {
+      const r = await DrivePedidos.readJson(e.driveId);
+      if (r && (r.estado === 'hecho' || r.estado === 'error')) {
+        Object.assign(e, { estado: r.estado, msg: r.mensaje || '', antes: r.antes, ahora: r.ahora, codAntes: r.codigoAntes, codAhora: r.codigoAhora, glop: r.glop?.descripcion || '', hecho: Date.now() });
+        if (e.tipo === 'articulo') {
+          // el precio puede haberse cambiado aunque el código diera error
+          if (r.ahora) prApplyLocal(e);
+          if (r.estado === 'hecho' && r.codigoAhora) prApplyCodigoLocal(e, r.codigoAhora);
+          if (r.estado === 'hecho') toast(`✓ Ya en Glop: ${e.d}`, { type: 'ok', timeout: 5000 });
+          else toast(`No se pudo cambiar ${e.d}: ${e.msg}`, { type: 'err', timeout: 9000 });
+        }
+        else if (r.estado === 'hecho' && e.tipo === 'codigo') { prApplyCodigoLocal(e); toast(`✓ Ya en Glop: ${e.d} con el código ${e.ahora}`, { type: 'ok', timeout: 5000 }); }
+        else if (r.estado === 'hecho') { prApplyLocal(e); toast(`✓ Ya en Glop: ${e.d} a ${euro(e.ahora)}`, { type: 'ok', timeout: 5000 }); }
+        else toast(`No se pudo cambiar ${e.d}: ${e.msg}`, { type: 'err', timeout: 9000 });
+      }
+    } catch (err) {
+      if (/caducada/.test(err.message)) { A.needAuth = true; barraAuth(); break; }
+      if (/ 404/.test(err.message)) Object.assign(e, { estado: 'error', msg: 'El aviso ya no está en Google Drive' });
+    }
+  }
+  prSaveEnv(); prRenderEnv();
+  if (!A.needAuth && PR.env.some(e => e.estado === 'esperando')) prPollSoon(document.hidden ? 30000 : 6000);
+}
+
+function prRenderEnv() {
+  pintarStats();
+  const list = PR.env, box = $('#pr-env');
+  if (!list.length) { box.innerHTML = '<li class="env-vacio">Todavía no has cambiado ningún precio desde aquí.</li>'; return; }
+  box.innerHTML = list.slice(0, 40).map((e, i) => {
+    const [cls, txt] = e.tipo === 'articulo' && e.estado === 'error' && e.ahora ? ['err', 'Solo el precio'] : e.estado === 'error' ? ['err', 'No se cambió'] : ESTADO[e.estado] || ['', e.estado];
+    let msg = e.msg || '';
+    if (lento(e)) msg = MSG_LENTO;
+    // Qué se cambia: precio y/o código (los avisos antiguos de solo precio o solo código también se ven)
+    const art = e.tipo === 'articulo', hecho = e.estado === 'hecho';
+    const precio = art ? e.nuevo != null : e.tipo !== 'codigo';
+    const codigo = art ? !!e.codNuevo : e.tipo === 'codigo';
+    const cambios = [];
+    if (precio) cambios.push(`<s>${euro(hecho || e.ahora ? Number(e.antes) : e.visto)}</s> ${euro(hecho || e.ahora ? Number(e.ahora) : e.nuevo)}`);
+    if (codigo) {
+      const ca = art ? (hecho ? e.codAntes : e.codVisto) : (hecho ? e.antes : e.visto), cn = art ? (hecho ? e.codAhora : e.codNuevo) : (hecho ? e.ahora : e.nuevo);
+      cambios.push(`<s>${esc(ca || 'sin código')}</s> ${esc(cn)}`);
+    }
+    const etiqueta = precio && codigo ? 'precio y código' : codigo ? 'código' : '';
+    return `<li class="env"><div class="grow"><div class="e-desc">${etiqueta ? `<span class="e-tipo">${etiqueta}</span>` : ''}${esc(e.d)}</div>
+      <div class="e-sub">${horaDe(e.t)}${e.c ? ' · ' + esc(e.c) : ''}</div>
+      ${msg ? `<div class="e-msg ${e.estado === 'hecho' || e.estado === 'esperando' ? 'warn' : 'err'}">${esc(msg)}</div>` : ''}
+      ${e.estado === 'no-enviado' ? `<div class="e-btns"><button type="button" data-pr-retry="${i}">Reintentar</button></div>` : ''}</div>
+      <div class="env-right"><span class="pill ${cls}">${txt}</span>${cambios.map(c => `<div class="e-price">${c}</div>`).join('')}</div></li>`;
+  }).join('');
+}
+
+/* ---------- Escáner (cámara) ---------- */
+let scanner = null, scanMode = 'alta';   // alta: código del producto nuevo · precio: buscar producto · codigo: código nuevo de un producto
+async function abrirEscaner(modo) {
+  scanMode = modo;
+  if (!window.Html5Qrcode) return toast('No se pudo cargar el escáner (¿sin conexión?).', { type: 'err' });
+  $('#scan-status').textContent = modo === 'alta' ? 'Apunta la cámara al código de barras del producto nuevo'
+    : modo === 'codigo' ? 'Apunta al código de barras NUEVO del producto' : 'Apunta al código del producto para cambiarle el precio';
+  $('#dlg-scan').showModal();
+  try {
+    const F = window.Html5QrcodeSupportedFormats;
+    scanner = new Html5Qrcode('reader', { verbose: false, useBarCodeDetectorIfSupported: true,
+      formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.ITF] });
+    await scanner.start({ facingMode: 'environment' },
+      { fps: 12, qrbox: (w, h) => ({ width: Math.floor(w * 0.86), height: Math.max(80, Math.floor(Math.min(h * 0.5, w * 0.42))) }) },
+      leido, () => {});
+  } catch (e) {
+    $('#scan-status').textContent = 'No se pudo abrir la cámara. Revisa que el navegador tenga permiso.';
+  }
+}
+function leido(text) {
+  $('#dlg-scan').close();
+  if (scanMode === 'alta') return ponerCodigo(text);
+  if (scanMode === 'codigo') {
+    beep(true);
+    const i = $('#pr-cod-new');
+    if (i) { i.value = text; const p = prCodCheck(); prBtnTxt(); (p ? i : $('#pr-send')).focus(); }
+    return;
+  }
+  const r = porCodigo(text);
+  beep(!!r);
+  if (r) prSelect(r);
+  else { $('#pr-search').value = text; prSearch(); }   // sale "no está en Glop" con el botón para darlo de alta
+}
+async function pararEscaner() {
+  const s = scanner; scanner = null;
+  if (s) { try { if (s.isScanning) await s.stop(); s.clear(); } catch {} }
+}
+
+/* ---------- Arranque ---------- */
+function bind() {
+  document.querySelectorAll('[data-ic]').forEach(el => { el.outerHTML = icon(el.dataset.ic); });
+  document.querySelectorAll('.tabs [data-tab]').forEach(b => b.addEventListener('click', () => verTab(b.dataset.tab)));
+
+  // Nuevo producto
   $('#ficha').addEventListener('submit', enviarAlta);
   $('#a-cod').addEventListener('input', revisarCodigo);
   $('#a-cod').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (val('#a-cod')) ponerCodigo(val('#a-cod')); else $('#a-desc').focus(); } });
+  $('#m-cod').addEventListener('click', e => { const b = e.target.closest('[data-ir-precio]'); if (b) { verTab('precio', false); prSelect(A.rows[+b.dataset.irPrecio]); } });
   $('#a-desc').addEventListener('input', () => revisarNombre());
   $('#a-desc').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#a-ped').focus(); } });
   $('#a-ped').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#a-fam').focus(); } });
@@ -556,24 +986,96 @@ function init() {
   $('#a-pvp').addEventListener('input', () => { if ($('#f-pvp').classList.contains('bad')) revisarPrecio(); });
   $('#a-pvp').addEventListener('blur', () => revisarPrecio());
   $('#btn-limpiar').addEventListener('click', () => limpiarFicha());
-  $('#btn-scan').addEventListener('click', abrirEscaner);
-  $('#scan-close').addEventListener('click', () => $('#dlg-scan').close());
-  $('#dlg-scan').addEventListener('close', pararEscaner);
+  $('#btn-scan').addEventListener('click', () => abrirEscaner('alta'));
   $('#env').addEventListener('click', e => {
     const r = e.target.closest('[data-retry]'), c = e.target.closest('[data-edit]');
-    if (r) { const ent = A.env[+r.dataset.retry]; if (ent) subir(ent, true); }
+    if (r) { const ent = A.env[+r.dataset.retry]; if (ent) subirAlta(ent, true); }
     if (c) { const ent = A.env[+c.dataset.edit]; if (ent) corregir(ent); }
   });
+
+  // Cambiar precio
+  let t;
+  const search = $('#pr-search');
+  search.addEventListener('input', () => { clearTimeout(t); t = setTimeout(prSearch, 90); });
+  search.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); clearTimeout(t);
+      const q = search.value.trim(); if (!q) return;
+      const r = /^\d+$/.test(q) ? porCodigo(q) : null;
+      if (!r) prSearch();
+      const target = r || (PR.results.length === 1 ? PR.results[0] : null);
+      if (target) { beep(true); prSelect(target); }
+      else if (/^\d+$/.test(q)) beep(false);
+    } else if (e.key === 'Escape' && search.value) { e.preventDefault(); search.value = ''; prSearch(); }
+  });
+  $('#pr-scan').addEventListener('click', () => abrirEscaner('precio'));
+  $('#pr-results').addEventListener('click', e => {
+    const li = e.target.closest('li[data-pr]'); if (li) return prSelect(A.rows[+li.dataset.pr]);
+    const b = e.target.closest('[data-alta-cod]');
+    if (b) { search.value = ''; prSearch(); verTab('alta', false); $('#a-cod').value = b.dataset.altaCod; revisarCodigo(); $('#a-desc').focus(); }
+  });
+  const card = $('#pr-card');
+  card.addEventListener('click', e => {
+    const q = e.target.closest('[data-q]');
+    if (q && PR.sel) {
+      const base = parsePrecio($('#pr-new').value) ?? PR.sel.pvp;
+      const v = Math.max(0.01, round2((isNaN(base) ? 0 : base) + Number(q.dataset.q)));
+      $('#pr-new').value = v.toFixed(2).replace('.', ','); prDiff(); prBtnTxt(); return;
+    }
+    if (e.target.closest('#pr-send')) prSend();
+    else if (e.target.closest('#pr-cancel')) { prCloseCard(); search.focus(); }
+    else if (e.target.closest('#pr-cod-edit')) prCodOpen();
+    else if (e.target.closest('#pr-cod-scan')) abrirEscaner('codigo');
+  });
+  card.addEventListener('input', e => { if (e.target.id === 'pr-new') prDiff(); else if (e.target.id === 'pr-cod-new') prCodCheck(); prBtnTxt(); });
+  card.addEventListener('keydown', e => {
+    if (e.target.id === 'pr-cod-new') {
+      // el lector de códigos escribe el código y pulsa Intro: se comprueba todo y se pide confirmación
+      if (e.key === 'Enter') { e.preventDefault(); prSend(); }
+      else if (e.key === 'Escape') { e.preventDefault(); $('#pr-cod-form').hidden = true; prBtnTxt(); }
+      return;
+    }
+    if (e.target.id !== 'pr-new') return;
+    if (e.key === 'Enter') { e.preventDefault(); prSend(); }
+    else if (e.key === 'Escape') { e.preventDefault(); prCloseCard(); search.focus(); }
+  });
+  $('#pr-env').addEventListener('click', e => { const b = e.target.closest('[data-pr-retry]'); if (b) { const ent = PR.env[+b.dataset.prRetry]; if (ent) prUpload(ent, true); } });
+
+  // Comunes
+  $('#scan-close').addEventListener('click', () => $('#dlg-scan').close());
+  $('#dlg-scan').addEventListener('close', pararEscaner);
   $('#auth-btn').addEventListener('click', () => {
     DrivePedidos.connect()
-      .then(() => { A.needAuth = false; barraAuth(); A.env.filter(x => x.estado === 'no-enviado').forEach(x => subir(x, false)); pollPronto(300); })
+      .then(() => {
+        A.needAuth = false; barraAuth();
+        A.env.filter(x => x.estado === 'no-enviado').forEach(x => subirAlta(x, false));
+        PR.env.filter(x => x.estado === 'no-enviado').forEach(x => prUpload(x, false));
+        pollAltas(300); prPollSoon(300);
+      })
       .catch(err => toast('Google: ' + err.message, { type: 'err', timeout: 8000 }));
   });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && A.env.some(e => e.estado === 'esperando')) pollPronto(500); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    // por si entretanto se han cambiado precios desde Pedidos 2.0
+    prSaveEnv(); prRenderEnv();
+    if (A.env.some(e => e.estado === 'esperando')) pollAltas(500);
+    if (PR.env.some(e => e.estado === 'esperando')) prPollSoon(500);
+  });
+}
 
+function init() {
+  A.env = store.get(KA.env, []);
+  PR.env = store.get(KP.env, []);
+  PR.over = store.get(KP.over, {});
+  // Si la app se cerró mientras se enviaba algo, queda para reintentar
+  for (const e of [...A.env, ...PR.env]) if (e.estado === 'enviando') Object.assign(e, { estado: 'no-enviado', msg: 'Se cerró la app antes de enviarlo' });
+  guardarEnv(); prSaveEnv();
+  bind();
+  pintarEnv(); prRenderEnv(); revisarCodigo(); revisarNombre(); prSearch();
+  verTab(/^#precios?$/.test(location.hash) ? 'precio' : 'alta');
   cargarGlop();
-  if (A.env.some(e => e.estado === 'esperando')) pollPronto(1500);
-  if (!matchMedia('(pointer:coarse)').matches) $('#a-cod').focus();
+  if (A.env.some(e => e.estado === 'esperando')) pollAltas(1500);
+  if (PR.env.some(e => e.estado === 'esperando')) prPollSoon(1500);
 }
 init();
 </script>
