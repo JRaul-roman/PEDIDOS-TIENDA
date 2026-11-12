@@ -152,7 +152,18 @@
       return f.id;
     },
     /** Lee el contenido de un archivo JSON creado por la app (puede haberlo reescrito el ordenador de la tienda). */
-    readJson: id => gfetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, { cache: 'no-store' })
+    readJson: id => gfetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, { cache: 'no-store' }),
+    /** Busca un archivo por nombre en PEDIDOS/<subfolder> (solo ve los que ha creado la app). Devuelve el id del más antiguo o null. */
+    async findFile(subfolder, filename) {
+      const parent = await folder(subfolder, await folder(ROOT_NAME, 'root'));
+      const q = encodeURIComponent(`name='${filename.replace(/'/g, "\\'")}' and trashed=false and '${parent}' in parents`);
+      const r = await gfetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&orderBy=createdTime&spaces=drive`);
+      return r.files?.[0]?.id || null;
+    },
+    /** Reescribe el contenido de un archivo JSON creado por la app. */
+    updateJson: (id, obj) => gfetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media&fields=id`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(obj, null, 1)
+    })
   };
   window.DrivePedidos = api;
 })();

@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Pan</title>
+    <meta name="theme-color" content="#0f172a">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+:root {
+    --bg-body: #0f172a;
+    --bg-sidebar: #1e293b;
+    --bg-card: #1e293b;
+    --bg-card-hover: #334155;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --accent-color: #f59e0b;
+    /* Amber 500 */
+    --accent-hover: #d97706;
+    --danger: #ef4444;
+    --success: #22c55e;
+    --border-color: #334155;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --radius-lg: 1rem;
+    --radius-md: 0.75rem;
+    --radius-sm: 0.5rem;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Outfit', sans-serif;
+    background-color: var(--bg-body);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+}
+
+.app-container {
+    display: flex;
+    height: 100%;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 280px;
+    background-color: var(--bg-sidebar);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem;
+    transition: width 0.3s ease;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+    color: var(--accent-color);
+}
+
+.brand i {
+    font-size: 1.5rem;
+}
+
+.brand h1 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.brand .year {
+    color: var(--accent-color);
+}
+
+.year-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: -1rem 0 1.5rem;
+    padding: 0.25rem;
+    background-color: var(--bg-body);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+}
+
+.year-nav .year {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--accent-color);
+}
+
+.year-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.year-btn:hover {
+    background-color: var(--bg-card-hover);
+    color: var(--text-primary);
+}
+
+.month-nav {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+.month-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    font-weight: 500;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.month-btn:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.month-btn.active {
+    background-color: var(--accent-color);
+    color: white;
+    box-shadow: var(--shadow-md);
+}
+
+.stats-summary {
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: rgba(255, 255, 255, 0.03);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.stats-summary h3 {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: radial-gradient(circle at top right, #1e293b 0%, #0f172a 40%);
+}
+
+.top-bar {
+    padding: 1.5rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    background-color: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(10px);
+}
+
+.top-bar h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.actions {
+    display: flex;
+    gap: 1rem;
+}
+
+button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background-color: var(--accent-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: var(--accent-hover);
+}
+
+.btn-secondary {
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.btn-secondary:hover {
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+}
+
+/* Dashboard Grid */
+.dashboard-grid {
+    flex: 1;
+    padding: 2rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.month-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.5rem;
+}
+
+.card {
+    background-color: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.stat-card {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.icon-box {
+    width: 3rem;
+    height: 3rem;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+}
+
+.barra-icon {
+    background-color: rgba(245, 158, 11, 0.1);
+    color: var(--accent-color);
+}
+
+.bocadillo-icon {
+    background-color: rgba(34, 197, 94, 0.1);
+    color: var(--success);
+}
+
+.stat-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-info .label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.stat-info .value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* Calendar/List View */
+.calendar-view {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    /* Smaller min-width to fit all cards */
+    gap: 0.5rem;
+    /* Reduce gap */
+    padding-bottom: 1rem;
+}
+
+.day-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    /* smaller radius */
+    padding: 0.5rem;
+    /* Reduced padding */
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    /* Reduce gap */
+}
+
+.day-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--accent-color);
+}
+
+.day-card.weekend {
+    border-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* Ensure empty-day overrides weekend style if both are present */
+.day-card.empty-day {
+    border: 2px dashed rgba(239, 68, 68, 0.6) !important;
+    background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+/* Día de hoy: siempre resaltado en naranja */
+.day-card.today {
+    border: 2px solid var(--accent-color) !important;
+    background-color: rgba(245, 158, 11, 0.12) !important;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25);
+}
+
+.day-card.today .day-name {
+    color: var(--accent-color);
+    font-weight: 700;
+}
+
+.day-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0;
+    padding-bottom: 0.25rem;
+    /* Reduce padding */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.day-number {
+    font-weight: 600;
+    font-size: 0.85rem;
+    /* Reduce font size */
+}
+
+.day-name {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.day-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    /* Reduce gap */
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.input-label {
+    font-size: 0.65rem;
+    /* Reduce font size */
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    /* Reduce gap */
+}
+
+/* New Quantity Controls */
+.quantity-control {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 0.15rem;
+    border: 1px solid var(--border-color);
+}
+
+.stepper-btn {
+    width: 20px;
+    /* Smaller button */
+    height: 20px;
+    /* Smaller button */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 0;
+    font-size: 0.75rem;
+    /* Smaller icon */
+}
+
+.stepper-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.quantity-badge {
+    font-size: 0.8rem;
+    /* Smaller font */
+    font-weight: 600;
+    color: var(--text-primary);
+    min-width: 16px;
+    /* Smaller min-width */
+    text-align: center;
+}
+
+/* Specific Badge Styles for "Bocadillos" feel */
+.input-group.barras .quantity-badge {
+    color: var(--accent-color);
+}
+
+.input-group.bocadillos .quantity-badge {
+    color: var(--success);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .sidebar {
+        width: 200px;
+        padding: 0.75rem;
+    }
+
+    .brand h1 {
+        font-size: 1.1rem;
+    }
+
+    .dashboard-grid {
+        padding: 0.5rem;
+        gap: 0.5rem;
+    }
+
+    .month-stats {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+    }
+
+    .card {
+        padding: 0.75rem;
+    }
+
+    .calendar-view {
+        grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+        gap: 0.25rem;
+        padding-bottom: 2rem;
+    }
+
+    .day-card {
+        padding: 0.25rem;
+        gap: 0.15rem;
+    }
+
+    .stat-info .value {
+        font-size: 1.15rem;
+    }
+
+    .icon-box {
+        width: 2.25rem;
+        height: 2.25rem;
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .app-container {
+        flex-direction: column;
+        overflow-y: auto;
+    }
+
+    .sidebar {
+        width: 100%;
+        height: auto;
+        flex-direction: row;
+        align-items: center;
+        padding: 0.75rem;
+        overflow-x: auto;
+        gap: 1rem;
+    }
+
+    .brand {
+        margin-bottom: 0;
+        min-width: fit-content;
+    }
+
+    .year-nav {
+        margin: 0;
+        min-width: fit-content;
+        gap: 0.25rem;
+    }
+
+    .month-nav {
+        flex-direction: row;
+        overflow-x: auto;
+        padding-bottom: 0.25rem;
+        padding-right: 0;
+    }
+
+    .month-btn {
+        padding: 0.5rem 0.75rem;
+        white-space: nowrap;
+    }
+
+    .month-btn i {
+        display: none;
+    }
+
+    .stats-summary {
+        display: none;
+    }
+
+    .main-content {
+        height: auto;
+        overflow: visible;
+    }
+
+    .top-bar {
+        padding: 1rem;
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch;
+        text-align: center;
+    }
+
+    .actions {
+        justify-content: center;
+    }
+
+    .month-stats {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Estado de Google Drive */
+.btn-drive {
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    gap: 0.5rem;
+    white-space: nowrap;
+}
+.btn-drive.ok { color: var(--success); border-color: rgba(34, 197, 94, 0.45); }
+.btn-drive.busy { color: var(--text-secondary); }
+.btn-drive.warn { color: #fff; background-color: #2563eb; border-color: #2563eb; }
+.btn-drive.err { color: var(--danger); border-color: rgba(239, 68, 68, 0.6); }
+.btn-drive.off { opacity: 0.8; }
+
+@media (max-width: 768px) {
+    .actions { flex-wrap: wrap; gap: 0.5rem; }
+    .btn-drive { flex-basis: 100%; justify-content: center; }
+}
+    </style>
+    <script src="drive-pedidos.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="brand">
+                <i class="fa-solid fa-bread-slice"></i>
+                <h1>PanControl</h1>
+            </div>
+            <div class="year-nav">
+                <button id="prevYearBtn" class="year-btn" title="Año anterior"><i class="fa-solid fa-chevron-left"></i></button>
+                <span id="yearLabel" class="year"></span>
+                <button id="nextYearBtn" class="year-btn" title="Año siguiente"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+            <nav class="month-nav" id="monthNav">
+                <!-- Months and Summary will be generated here -->
+            </nav>
+        </aside>
+        
+        <main class="main-content">
+            <header class="top-bar">
+                <h2 id="currentMonthTitle">Enero</h2>
+                <div class="actions">
+                    <button id="driveBtn" class="btn-drive off" title="Google Drive"><i class="fa-solid fa-cloud"></i> <span>Drive</span></button>
+                    <button id="exportBtn" class="btn-primary"><i class="fa-solid fa-file-export"></i> Exportar CSV</button>
+                    <button id="importBtn" class="btn-primary" style="background-color: var(--success);"><i class="fa-solid fa-file-import"></i> Importar CSV</button>
+                    <input type="file" id="importFile" accept=".csv" style="display: none;">
+                    <button id="resetBtn" class="btn-secondary"><i class="fa-solid fa-rotate-right"></i> Resetear</button>
+                </div>
+            </header>
+            
+            <div class="dashboard-grid">
+                <div class="month-stats">
+                    <div class="card stat-card">
+                        <div class="icon-box barra-icon">
+                            <i class="fa-solid fa-bread-slice"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="label">Total Barras (Mes)</span>
+                            <span class="value" id="monthTotalBarras">0</span>
+                        </div>
+                    </div>
+                    <div class="card stat-card">
+                        <div class="icon-box bocadillo-icon">
+                            <i class="fa-solid fa-burger"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="label">Total Bocadillos (Mes)</span>
+                            <span class="value" id="monthTotalBocadillos">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="calendar-view" id="daysContainer">
+                    <!-- Days will be generated here -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+'use strict';
+/* Control de pan. Cada año se guarda en este navegador (localStorage 'panData<año>') y en Google Drive
+   (PEDIDOS / CONTROL PAN / control-pan-<año>.json), con la cuenta de drive-pedidos.js.
+   Cada día lleva la hora en que se cambió (t): al juntar lo de varios dispositivos gana el cambio más reciente. */
+
+const MONTHS = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+];
+
+const DAYS_OF_WEEK = [
+    "Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"
+];
+
+const DRIVE_FOLDER = 'CONTROL PAN';
+const fileName = year => `control-pan-${year}.json`;
+
+let appData = {};
+let currentYear = new Date().getFullYear();
+let currentMonth = new Date().getMonth(); // 0-indexed (Jan = 0)
+
+function storageKey(year) {
+    return `panData${year}`;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    init();
+});
+
+function init() {
+    const imported = importFromOldApp();
+    loadData();
+    renderYear();
+    renderSidebar();
+    renderMonth(currentMonth);
+    setupEventListeners();
+    setupDrive(imported);
+    scrollToToday();
+}
+
+// Al abrir, lleva la pantalla hasta el día de hoy
+function scrollToToday() {
+    const el = document.querySelector('.day-card.today');
+    if (el) setTimeout(() => el.scrollIntoView({ block: 'center' }), 50);
+}
+
+function startOfToday() {
+    const t = new Date();
+    return new Date(t.getFullYear(), t.getMonth(), t.getDate());
+}
+
+/* ---------- Datos ---------- */
+
+function emptyYear(year) {
+    const data = {};
+    for (let m = 0; m < 12; m++) {
+        const daysInMonth = new Date(year, m + 1, 0).getDate();
+        data[m] = {};
+        for (let d = 1; d <= daysInMonth; d++) {
+            data[m][d] = { barras: 0, bocadillos: 0, t: 0 };
+        }
+    }
+    return data;
+}
+
+function loadYear(year) {
+    const data = emptyYear(year);
+    let stored = null;
+    try { stored = JSON.parse(localStorage.getItem(storageKey(year))); } catch (e) {}
+    if (stored) {
+        for (const m in data) for (const d in data[m]) {
+            const x = stored[m] && stored[m][d];
+            if (x) data[m][d] = { barras: +x.barras || 0, bocadillos: +x.bocadillos || 0, t: +x.t || 0 };
+        }
+    }
+    return data;
+}
+
+function storeYear(year, data) {
+    try { localStorage.setItem(storageKey(year), JSON.stringify(data)); } catch (e) {}
+}
+
+function loadData() {
+    appData = loadYear(currentYear);
+}
+
+// Guarda un cambio hecho a mano: en este navegador y, poco después, en Drive
+function saveData() {
+    storeYear(currentYear, appData);
+    updateStats();
+    scheduleSync();
+}
+
+function hasData(data) {
+    for (const m in data) for (const d in data[m]) if (data[m][d].t || data[m][d].barras || data[m][d].bocadillos) return true;
+    return false;
+}
+
+// Formato del archivo de Drive: { dias: { "mes-día": [barras, bocadillos, t] } }, mes de 1 a 12
+function toRemote(data, year) {
+    const dias = {};
+    for (const m in data) for (const d in data[m]) {
+        const x = data[m][d];
+        if (x.t || x.barras || x.bocadillos) dias[`${+m + 1}-${d}`] = [x.barras, x.bocadillos, x.t];
+    }
+    return { app: 'control-pan', version: 1, año: year, actualizado: new Date().toISOString(), dias };
+}
+
+function fromRemote(obj, year) {
+    const data = emptyYear(year);
+    const dias = (obj && obj.dias) || {};
+    for (const k in dias) {
+        const [mes, dia] = k.split('-').map(Number);
+        const v = dias[k];
+        if (data[mes - 1] && data[mes - 1][dia] && Array.isArray(v)) {
+            data[mes - 1][dia] = { barras: +v[0] || 0, bocadillos: +v[1] || 0, t: +v[2] || 0 };
+        }
+    }
+    return data;
+}
+
+const sameDay = (x, y) => x.barras === y.barras && x.bocadillos === y.bocadillos && (x.t || 0) === (y.t || 0);
+
+// Junta dos copias del año: en cada día gana el cambio más reciente.
+// Los datos de la versión anterior no tienen hora (t = 0): ahí se queda el número mayor.
+function mergeYears(a, b) {
+    const data = {};
+    let changedA = false, changedB = false;
+    for (const m in a) {
+        data[m] = {};
+        for (const d in a[m]) {
+            const x = a[m][d], y = (b[m] && b[m][d]) || { barras: 0, bocadillos: 0, t: 0 };
+            let r;
+            if ((x.t || 0) > (y.t || 0)) r = x;
+            else if ((y.t || 0) > (x.t || 0)) r = y;
+            else if (!x.t) r = { barras: Math.max(x.barras, y.barras), bocadillos: Math.max(x.bocadillos, y.bocadillos), t: 0 };
+            else r = x;
+            r = { barras: r.barras, bocadillos: r.bocadillos, t: r.t || 0 };
+            if (!sameDay(r, x)) changedA = true;
+            if (!sameDay(r, y)) changedB = true;
+            data[m][d] = r;
+        }
+    }
+    return { data, changedA, changedB };
+}
+
+/* ---------- Datos de la versión anterior (control-pan.netlify.app) ---------- */
+
+// La dirección antigua manda aquí lo que tenía guardado en #importar=...
+function importFromOldApp() {
+    const m = /[#&]importar=([A-Za-z0-9_-]+)/.exec(location.hash);
+    if (!m) return [];
+    const years = [];
+    try {
+        const b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
+        const json = decodeURIComponent(escape(atob(b64 + '='.repeat((4 - b64.length % 4) % 4))));
+        const payload = JSON.parse(json);
+        for (const y in (payload.years || {})) {
+            const year = parseInt(y);
+            if (!year) continue;
+            const old = emptyYear(year);
+            const dias = payload.years[y];
+            for (const k in dias) {
+                const [mes, dia] = k.split('-').map(Number);
+                if (old[mes - 1] && old[mes - 1][dia]) old[mes - 1][dia] = { barras: +dias[k][0] || 0, bocadillos: +dias[k][1] || 0, t: 0 };
+            }
+            const { data, changedA } = mergeYears(loadYear(year), old);
+            if (changedA) storeYear(year, data);
+            years.push(year);
+        }
+    } catch (e) {
+        console.warn('No se pudieron leer los datos de la versión anterior', e);
+    }
+    history.replaceState(null, '', location.pathname + location.search);
+    return years;
+}
+
+/* ---------- Google Drive ---------- */
+
+const sync = { busy: false, again: false, timer: null, last: null, error: '', state: 'off', triedConnect: false, pendingYears: [] };
+
+// Sincroniza los años traídos de la versión anterior que falten y luego el año abierto
+async function syncAll() {
+    for (const y of sync.pendingYears.splice(0)) if (y !== currentYear) await syncYear(y);
+    await syncYear(currentYear);
+}
+
+function driveReady() {
+    return !!(window.DrivePedidos && DrivePedidos.status().configured && DrivePedidos.status().connected);
+}
+
+function scheduleSync(delay = 1500) {
+    if (!driveReady()) { setDriveStatus('off'); return; }
+    if (!DrivePedidos.status().active) { setDriveStatus('needAuth'); return; }
+    clearTimeout(sync.timer);
+    setDriveStatus('pending');
+    sync.timer = setTimeout(() => syncYear(currentYear), delay);
+}
+
+async function syncYear(year) {
+    if (!driveReady()) { setDriveStatus('off'); return; }
+    if (!DrivePedidos.status().active) { setDriveStatus('needAuth'); return; }
+    if (sync.busy) { sync.again = true; return; }
+    sync.busy = true;
+    setDriveStatus('syncing');
+    try {
+        const id = await DrivePedidos.findFile(DRIVE_FOLDER, fileName(year));
+        const remote = id ? fromRemote(await DrivePedidos.readJson(id), year) : emptyYear(year);
+        // Se junta justo después de leer, con lo que haya ahora mismo en pantalla
+        const local = year === currentYear ? appData : loadYear(year);
+        const { data, changedA, changedB } = mergeYears(local, remote);
+        if (changedA) {
+            storeYear(year, data);
+            if (year === currentYear) {
+                appData = data;
+                renderMonth(currentMonth);
+            }
+        }
+        if (id && changedB) await DrivePedidos.updateJson(id, toRemote(data, year));
+        else if (!id && hasData(data)) await DrivePedidos.uploadJson(DRIVE_FOLDER, fileName(year), toRemote(data, year));
+        sync.last = new Date();
+        sync.error = '';
+        setDriveStatus('ok');
+    } catch (e) {
+        sync.error = e.message;
+        setDriveStatus(/caducada/i.test(e.message) ? 'needAuth' : 'error');
+    } finally {
+        sync.busy = false;
+        if (sync.again) { sync.again = false; syncYear(currentYear); }
+    }
+}
+
+// Abre la ventana de Google (tiene que ser dentro de un toque) y sincroniza
+function connectDrive() {
+    if (!window.DrivePedidos) return;
+    setDriveStatus('syncing');
+    DrivePedidos.connect()
+        .then(syncAll)
+        .catch(e => { sync.error = e.message; setDriveStatus('needAuth'); });
+}
+
+function setDriveStatus(state) {
+    sync.state = state;
+    const btn = document.getElementById('driveBtn');
+    if (!btn) return;
+    const hora = sync.last ? sync.last.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
+    const views = {
+        off: ['off', 'fa-cloud', 'Drive desactivado', 'Toca para guardar también en Google Drive'],
+        needAuth: ['warn', 'fa-cloud-arrow-up', 'Conectar con Drive', sync.error || 'La sesión de Google ha caducado: toca para seguir guardando en Drive'],
+        pending: ['busy', 'fa-cloud-arrow-up', 'Guardando…', 'Guardando en Google Drive'],
+        syncing: ['busy', 'fa-rotate', 'Guardando…', 'Guardando en Google Drive'],
+        ok: ['ok', 'fa-cloud', hora ? `En Drive · ${hora}` : 'En Drive', 'Guardado en Google Drive (PEDIDOS / CONTROL PAN)'],
+        error: ['err', 'fa-triangle-exclamation', 'Error con Drive', (sync.error || 'Error') + ' · Toca para reintentar']
+    };
+    const [cls, icon, text, title] = views[state] || views.off;
+    btn.className = `btn-drive ${cls}`;
+    btn.title = title;
+    btn.innerHTML = `<i class="fa-solid ${icon}${state === 'syncing' ? ' fa-spin' : ''}"></i> <span>${text}</span>`;
+}
+
+async function setupDrive(importedYears) {
+    document.getElementById('driveBtn').addEventListener('click', () => {
+        if (sync.state === 'ok' || sync.state === 'error') { syncYear(currentYear); return; }
+        if (sync.state === 'needAuth' || sync.state === 'off') connectDrive();
+    });
+    sync.pendingYears = importedYears.slice();
+    // Recoge lo apuntado en otros dispositivos
+    const refresh = () => { if (!document.hidden && driveReady() && DrivePedidos.status().active) syncYear(currentYear); };
+    setInterval(refresh, 60000);
+    document.addEventListener('visibilitychange', refresh);
+    if (!driveReady()) { setDriveStatus('off'); return; }
+    if (!DrivePedidos.status().active) { setDriveStatus('needAuth'); return; }
+    await syncAll();
+}
+
+/* ---------- Pantalla ---------- */
+
+function renderYear() {
+    document.getElementById('yearLabel').textContent = currentYear;
+    document.title = `Control de Pan ${currentYear}`;
+}
+
+function changeYear(delta) {
+    currentYear += delta;
+    loadData();
+    renderYear();
+    renderMonth(currentMonth);
+    if (driveReady() && DrivePedidos.status().active) syncYear(currentYear);
+}
+
+function renderSidebar() {
+    const nav = document.getElementById('monthNav');
+    nav.innerHTML = '';
+
+    MONTHS.forEach((month, index) => {
+        const btn = document.createElement('button');
+        btn.className = `month-btn ${index === currentMonth ? 'active' : ''}`;
+        btn.innerHTML = `<span>${month}</span> <i class="fa-solid fa-chevron-right" style="font-size: 0.7em; opacity: 0.5;"></i>`;
+        btn.onclick = () => {
+            currentMonth = index;
+            renderSidebar(); // Re-render to update active class
+            renderMonth(currentMonth);
+        };
+        nav.appendChild(btn);
+    });
+
+    const summaryDiv = document.createElement('div');
+    summaryDiv.className = 'stats-summary';
+    summaryDiv.innerHTML = `
+        <h3>Resumen Anual</h3>
+        <div class="stat-item">
+            <span>Barras</span>
+            <span id="totalYearBarras">0</span>
+        </div>
+        <div class="stat-item">
+            <span>Bocadillos</span>
+            <span id="totalYearBocadillos">0</span>
+        </div>
+    `;
+    nav.appendChild(summaryDiv);
+
+    updateStats();
+}
+
+function renderMonth(monthIndex) {
+    const container = document.getElementById('daysContainer');
+    const title = document.getElementById('currentMonthTitle');
+
+    container.innerHTML = '';
+    title.textContent = MONTHS[monthIndex];
+
+    const daysInMonth = new Date(currentYear, monthIndex + 1, 0).getDate();
+    const today = startOfToday();
+
+    for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(currentYear, monthIndex, d);
+        const dayName = DAYS_OF_WEEK[date.getDay()];
+        const dayData = appData[monthIndex][d];
+        const isToday = date.getTime() === today.getTime();
+
+        const card = document.createElement('div');
+        card.className = 'day-card';
+
+        if (isToday) {
+            card.classList.add('today');
+        }
+
+        // En rojo solo los días ya pasados que se quedaron sin apuntar
+        if (dayData.barras === 0 && dayData.bocadillos === 0 && date < today) {
+            card.classList.add('empty-day');
+        }
+
+        if (date.getDay() === 0 || date.getDay() === 6) {
+            card.classList.add('weekend');
+        }
+
+        card.innerHTML = `
+            <div class="day-header">
+                <span class="day-number">${d}</span>
+                <span class="day-name">${isToday ? 'HOY' : dayName.substring(0, 3)}</span>
+            </div>
+            <div class="day-inputs">
+                <div class="input-group barras">
+                    <span class="input-label"><i class="fa-solid fa-bread-slice" style="color: var(--accent-color); font-size: 0.8em;"></i> Barras</span>
+                    <div class="quantity-control">
+                        <button class="stepper-btn" onclick="updateValueRelative(${monthIndex}, ${d}, 'barras', -1)"><i class="fa-solid fa-minus"></i></button>
+                        <span class="quantity-badge">${dayData.barras}</span>
+                        <button class="stepper-btn" onclick="updateValueRelative(${monthIndex}, ${d}, 'barras', 1)"><i class="fa-solid fa-plus"></i></button>
+                    </div>
+                </div>
+                <div class="input-group bocadillos">
+                    <span class="input-label"><i class="fa-solid fa-burger" style="color: var(--success); font-size: 0.8em;"></i> Bocadillos</span>
+                    <div class="quantity-control">
+                        <button class="stepper-btn" onclick="updateValueRelative(${monthIndex}, ${d}, 'bocadillos', -1)"><i class="fa-solid fa-minus"></i></button>
+                        <span class="quantity-badge">${dayData.bocadillos}</span>
+                        <button class="stepper-btn" onclick="updateValueRelative(${monthIndex}, ${d}, 'bocadillos', 1)"><i class="fa-solid fa-plus"></i></button>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    }
+
+    updateStats();
+}
+
+function updateValueRelative(month, day, type, change) {
+    const current = appData[month][day][type];
+    appData[month][day][type] = Math.max(0, current + change); // Prevent negative
+    appData[month][day].t = Date.now();
+    // Si la sesión de Google caducó, el primer toque la renueva (una vez por visita)
+    if (sync.state === 'needAuth' && !sync.triedConnect && driveReady()) {
+        sync.triedConnect = true;
+        connectDrive();
+    }
+    saveData();
+    renderMonth(month);
+}
+
+function updateStats() {
+    let mBarras = 0;
+    let mBocadillos = 0;
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+    for (let d = 1; d <= daysInMonth; d++) {
+        mBarras += appData[currentMonth][d].barras;
+        mBocadillos += appData[currentMonth][d].bocadillos;
+    }
+
+    const elMBarras = document.getElementById('monthTotalBarras');
+    const elMBocadillos = document.getElementById('monthTotalBocadillos');
+    if (elMBarras) elMBarras.textContent = mBarras.toLocaleString();
+    if (elMBocadillos) elMBocadillos.textContent = mBocadillos.toLocaleString();
+
+    let yBarras = 0;
+    let yBocadillos = 0;
+
+    for (let m = 0; m < 12; m++) {
+        const dCount = new Date(currentYear, m + 1, 0).getDate();
+        for (let d = 1; d <= dCount; d++) {
+            yBarras += appData[m][d].barras;
+            yBocadillos += appData[m][d].bocadillos;
+        }
+    }
+
+    const elYBarras = document.getElementById('totalYearBarras');
+    const elYBocadillos = document.getElementById('totalYearBocadillos');
+    if (elYBarras) elYBarras.textContent = yBarras.toLocaleString();
+    if (elYBocadillos) elYBocadillos.textContent = yBocadillos.toLocaleString();
+}
+
+function setupEventListeners() {
+    document.getElementById('exportBtn').addEventListener('click', exportToCSV);
+    document.getElementById('prevYearBtn').addEventListener('click', () => changeYear(-1));
+    document.getElementById('nextYearBtn').addEventListener('click', () => changeYear(1));
+
+    const importBtn = document.getElementById('importBtn');
+    const importFile = document.getElementById('importFile');
+
+    importBtn.addEventListener('click', () => {
+        importFile.click();
+    });
+
+    importFile.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                processCSV(e.target.result);
+            };
+            reader.readAsText(file);
+        }
+        // Reset the input so the same file can be selected again
+        event.target.value = '';
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+        if (confirm(`¿Estás seguro de que quieres borrar todos los datos de ${currentYear}? Se borrarán también en Google Drive y en los demás dispositivos.`)) {
+            const t = Date.now();
+            appData = emptyYear(currentYear);
+            for (const m in appData) for (const d in appData[m]) appData[m][d].t = t;
+            saveData();
+            renderMonth(currentMonth);
+        }
+    });
+}
+
+function processCSV(csvText) {
+    const lines = csvText.split('\n');
+    if (lines.length < 2) {
+        alert('El archivo está vacío o no es un CSV de Control de Pan.');
+        return;
+    }
+
+    // El año va en la columna Fecha (d/m/aaaa) de la primera fila con datos
+    const firstRow = lines.slice(1).find(l => l.trim());
+    const yearMatch = firstRow && firstRow.split(',')[0].match(/\/(\d{4})\s*$/);
+    const fileYear = yearMatch ? parseInt(yearMatch[1]) : currentYear;
+
+    if (fileYear !== currentYear) {
+        if (!confirm(`Este archivo es del año ${fileYear} y tienes abierto ${currentYear}.\n\n¿Importarlo en ${fileYear}? Se sustituirán los datos que haya de ese año.`)) return;
+        currentYear = fileYear;
+        loadData();
+        renderYear();
+    } else if (!confirm(`¿Importar el archivo? Se sustituirán todos los datos de ${currentYear} por los del archivo.`)) {
+        return;
+    }
+
+    // Lo importado cuenta como un cambio de ahora: sustituye lo que haya en todos los dispositivos
+    const t = Date.now();
+    const importedData = emptyYear(currentYear);
+    for (const m in importedData) for (const d in importedData[m]) importedData[m][d].t = t;
+
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const parts = line.split(',');
+        if (parts.length >= 5) {
+            // Format: Fecha,Mes,Dia,Barras,Bocadillos
+            const monthIndex = MONTHS.indexOf(parts[1]);
+            const day = parseInt(parts[2]);
+            if (monthIndex !== -1 && !isNaN(day) && importedData[monthIndex][day]) {
+                importedData[monthIndex][day].barras = parseInt(parts[3]) || 0;
+                importedData[monthIndex][day].bocadillos = parseInt(parts[4]) || 0;
+            }
+        }
+    }
+
+    appData = importedData;
+    saveData();
+    renderMonth(currentMonth);
+    alert('Datos importados correctamente.');
+}
+
+function exportToCSV() {
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Fecha,Mes,Dia,Barras,Bocadillos\n";
+
+    for (let m = 0; m < 12; m++) {
+        const dCount = new Date(currentYear, m + 1, 0).getDate();
+        for (let d = 1; d <= dCount; d++) {
+            const date = `${d}/${m + 1}/${currentYear}`;
+            const row = [
+                date,
+                MONTHS[m],
+                d,
+                appData[m][d].barras,
+                appData[m][d].bocadillos
+            ].join(",");
+            csvContent += row + "\n";
+        }
+    }
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `control_pan_${currentYear}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+    </script>
+</body>
+</html>
