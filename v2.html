@@ -718,6 +718,8 @@ async function refreshCatalog(manual = false) {
     try {
       const res = await fetch(url + (url.includes('?') ? '&' : '?') + '_=' + Date.now(), { cache: 'no-store' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
+      // Sin conexión, sw.js devuelve su copia guardada: si ya hay catálogo en este aparato, se deja como está (con su hora)
+      if (res.headers.get('X-Copia-Guardada') && S.catalog.length) throw new Error('Sin conexión');
       const rows = rowsToProducts(parseCatalogText(await res.text()));
       if (!rows.length) throw new Error('El archivo no contiene productos.');
       const meta = { count: rows.length, updated: Date.now(), source: url };
@@ -1982,6 +1984,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (driveOn() && DrivePedidos.status().active && pendingDrive().length) syncDrive(pendingDrive(), false);
   }
 });
+</script>
+<script>
+// Guarda la app en el aparato para que abra sin conexión (ver sw.js)
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 </script>
 </body>
 </html>

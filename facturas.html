@@ -1044,5 +1044,9 @@ pintarAjustes();   // rellena la IA y el modelo elegidos junto a "Leer factura"
 pintar();
 cargarPvp().then(() => { if (F) { F.lineas.forEach(l => { if (!l.cruce || l.cruce.estado === 'sin_lista') l.cruce = cruzar(l); }); pintar(); } });
 </script>
+<script>
+// Guarda la app en el aparato para que abra sin conexión (ver sw.js)
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+</script>
 </body>
 </html>

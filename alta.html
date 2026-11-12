@@ -1079,5 +1079,9 @@ function init() {
 }
 init();
 </script>
+<script>
+// Guarda la app en el aparato para que abra sin conexión (ver sw.js)
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+</script>
 </body>
 </html>
