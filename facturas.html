@@ -111,6 +111,11 @@ b.final{font-size:15px}
 </header>
 
 <main class="layout">
+  <section class="card hidden" id="card-reglas">
+    <h2>Faltan las reglas de márgenes</h2>
+    <p class="small" style="margin:8px 0 12px">Están guardadas en tu Google Drive. Conecta con Drive para traerlas a este dispositivo; solo hace falta la primera vez.</p>
+    <button class="btn primary" id="btn-reglas">Conectar con Drive</button>
+  </section>
   <section class="card">
     <div class="card-head"><h2>1. Factura</h2><button class="btn sm" id="btn-nueva">Nueva factura</button></div>
     <div class="drop">
@@ -185,6 +190,7 @@ b.final{font-size:15px}
     <hr style="border:0;border-top:1px solid var(--border);margin:16px 0">
     <h2>Google Drive</h2>
     <p class="small" id="drive-estado"></p>
+    <p class="small" id="reglas-estado"></p>
     <button class="btn" id="btn-drive-conectar">Conectar con Drive</button>
   </div>
 </div>
@@ -224,8 +230,14 @@ const toast = msg => { const t = $('#toast'); t.textContent = msg; t.classList.a
 const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
-/* ---------- Márgenes (mismas reglas que el Director de Tarificación) ---------- */
-const CATS = [
+/* ---------- Márgenes (mismas reglas que el Director de Tarificación) ----------
+   Las reglas de márgenes se guardan en Google Drive (PEDIDOS / CONFIGURACION / reglas-margenes.json) y
+   cada dispositivo se queda una copia al conectar con Drive, para que no estén a la vista en esta página.
+   PASO 1 (provisional): siguen incluidas aquí abajo y la página las copia a Drive si allí no están.
+   En el paso 2 se quita REGLAS_INCLUIDAS (se deja en null) y la página usa solo las de Drive. */
+const REGLAS_INCLUIDAS = {
+  version: 1,
+  cats: [
   ['Limpieza e higiene', [
     ['limpieza_marca', 'Marca especial (Dos Rosas, 2R, La Salud, IFA, Eliges)', 65],
     ['limpieza_21', 'Limpieza/higiene IVA 21%', 60],
@@ -270,12 +282,9 @@ const CATS = [
     ['jamon_iberico', 'Jamón ibérico', 80],
     ['lomo', 'Lomo cebo y bellota', 40]]],
   ['Sin regla', [['sin_regla', 'Sin regla: elige el margen', null]]]
-];
-const CAT = {};
-CATS.forEach(([grupo, items]) => items.forEach(([id, nombre, mg]) => { CAT[id] = { id, nombre, mg, grupo }; }));
-const MARGENES = [25, 30, 35, 40, 45, 50, 55, 60, 65, 80];
-
-const REGLAS = `Eres el director de tarificación de un supermercado (La Tienda Nueva, Tembleque). Lees facturas, albaranes o listas de proveedores y clasificas cada producto en su categoría de margen. La app calcula después el precio; tú no calculas precios.
+],
+  margenes: [25, 30, 35, 40, 45, 50, 55, 60, 65, 80],
+  reglas: `Eres el director de tarificación de un supermercado (La Tienda Nueva, Tembleque). Lees facturas, albaranes o listas de proveedores y clasificas cada producto en su categoría de margen. La app calcula después el precio; tú no calculas precios.
 
 LEER LA FACTURA
 - Transcribe cada línea de producto: descripción tal cual, código de barras si aparece (EAN; si no, cadena vacía), cantidad comprada (0 si no aparece), precio base e IVA (%; 0 si no aparece).
@@ -305,7 +314,9 @@ Decisiones ya confirmadas por el dueño: arroz (SOS y cualquier arroz) → arroc
 Notas de proveedores:
 - Cafés Mora (Mora, Toledo): la columna "Tipo IVA" usa códigos 1 = 10%, 2 = 21%, 3 = 4%. Suele tener varias páginas.
 - Disycash VII: el precio es por unidad de venta (pack o unidad según el producto); la columna %IVA viene explícita.
-- Congelados El Músico: el IVA no aparece por línea, solo en el resumen de bases (10% y 4%). Deduce qué productos van al 4% cuadrando sus importes con la base al 4% (normalmente verduras como guisantes y espinacas).`;
+- Congelados El Músico: el IVA no aparece por línea, solo en el resumen de bases (10% y 4%). Deduce qué productos van al 4% cuadrando sus importes con la base al 4% (normalmente verduras como guisantes y espinacas).`
+};
+let CATS = [], CAT = {}, MARGENES = [], REGLAS = '';
 
 const SCHEMA = {
   type: 'object', additionalProperties: false,
@@ -340,6 +351,53 @@ function precioFinal(base, mg) {
   if (base == null || isNaN(base) || mg == null) return null;
   const b4 = Math.round(base * 10000);
   return Math.floor((b4 * (100 + mg) + 5000) / 10000) / 100;
+}
+
+/* ---------- Reglas de márgenes: copia en este dispositivo y en Drive ---------- */
+const REGLAS_CARPETA = 'CONFIGURACION', REGLAS_ARCHIVO = 'reglas-margenes.json';
+const reglasValidas = r => !!r && Array.isArray(r.cats) && r.cats.length > 0 && Array.isArray(r.margenes) && typeof r.reglas === 'string' && r.reglas.length > 100;
+const hayReglas = () => CATS.length > 0;
+function aplicarReglas(r) {
+  CATS = r.cats; CAT = {};
+  CATS.forEach(([grupo, items]) => items.forEach(([id, nombre, mg]) => { CAT[id] = { id, nombre, mg, grupo }; }));
+  MARGENES = r.margenes; REGLAS = r.reglas;
+  SCHEMA.properties.lineas.items.properties.categoria.enum = Object.keys(CAT);
+}
+let reglasEnDrive = false, sincronizando = null;
+/* Con Drive conectado: trae las reglas de Drive (o las copia allí la primera vez). Devuelve si hay reglas para trabajar. */
+function sincronizarReglas() {
+  const st = window.DrivePedidos?.status();
+  if (!st?.configured || !st.connected || !st.active) return Promise.resolve(hayReglas());
+  return sincronizando ||= (async () => {
+    try {
+      const id = await DrivePedidos.findFile(REGLAS_CARPETA, REGLAS_ARCHIVO);
+      if (id) {
+        const r = await DrivePedidos.readJson(id);
+        if (reglasValidas(r)) {
+          reglasEnDrive = true; lsSet('reglasMargenes', r);
+          if (!REGLAS_INCLUIDAS) { aplicarReglas(r); pintar(); }
+        }
+      } else if (REGLAS_INCLUIDAS) {
+        await DrivePedidos.uploadJson(REGLAS_CARPETA, REGLAS_ARCHIVO, REGLAS_INCLUIDAS);
+        reglasEnDrive = true; lsSet('reglasMargenes', REGLAS_INCLUIDAS);
+      }
+    } catch (e) { console.warn('Reglas de márgenes:', e?.message || e); }
+    finally { sincronizando = null; }
+    pintarReglas();
+    return hayReglas();
+  })();
+}
+function pintarReglas() {
+  $('#card-reglas').classList.toggle('hidden', hayReglas());
+  $('#reglas-estado').textContent = 'Reglas de márgenes: ' + (reglasEnDrive ? 'guardadas en tu Drive (PEDIDOS › CONFIGURACION).'
+    : hayReglas() ? 'en este dispositivo; se copian a tu Drive al conectar.' : 'faltan en este dispositivo: conecta con Drive para traerlas.');
+}
+/* Si faltan las reglas (dispositivo nuevo), avisa y lleva al botón que las trae de Drive */
+function faltanReglas() {
+  if (hayReglas()) return false;
+  toast('Faltan las reglas de márgenes: conecta con Google Drive');
+  $('#card-reglas').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  return true;
 }
 
 /* ---------- Estado ---------- */
@@ -519,7 +577,7 @@ async function leerConGemini(clave) {
 /* ---------- Leer con Groq (gratis, modelo con visión; solo imágenes, máx. 3 por petición) ---------- */
 const GROQ_MODELO = 'qwen/qwen3.8-27b';   // el recomendado: lee fotos, rápido
 const modeloGroq = () => { const m = lsGet('modelo_groq', 'auto'); return m === 'auto' ? GROQ_MODELO : m; };
-const FORMATO_JSON = `FORMATO DE RESPUESTA
+const FORMATO_JSON = () => `FORMATO DE RESPUESTA
 Responde solo con un objeto JSON, sin texto alrededor, con esta forma:
 {"proveedor": "", "fecha": "AAAA-MM-DD o vacío", "numero": "", "avisos": ["..."],
  "lineas": [{"descripcion": "", "codigo_barras": "", "cantidad": 0, "precio_base": 0.0, "iva": 0, "categoria": "una de: ${Object.keys(CAT).join(', ')}", "dudoso": false, "motivo": ""}]}
@@ -565,7 +623,7 @@ async function pedirGroq(clave, imagenes) {
           ...(op.modoJson ? { response_format: { type: 'json_object' } } : {}),
           ...(op.razonar ? {} : { reasoning_effort: 'none' }),   // sin "pensar": mucho más rápido
           messages: [
-            { role: 'system', content: REGLAS + '\n\n' + FORMATO_JSON },
+            { role: 'system', content: REGLAS + '\n\n' + FORMATO_JSON() },
             { role: 'user', content: [
               { type: 'text', text: `Lee ${imagenes.length === 1 ? 'esta página' : 'estas ' + imagenes.length + ' páginas'} de la factura (en orden) y devuelve sus líneas clasificadas en JSON.` },
               ...imagenes.map(d => ({ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + d } }))
@@ -657,6 +715,7 @@ const lectorActual = () => LECTORES[lsGet('lector', 'groq')] ? lsGet('lector', '
 // Se empieza por la IA elegida; si falla o tarda más de TIEMPO_IA, se pasa a la otra (si tiene clave guardada)
 const TIEMPO_IA = 45000;
 async function leerFactura() {
+  if (faltanReglas()) return;
   const elegido = lectorActual();
   const orden = [elegido, ...Object.keys(LECTORES).filter(x => x !== elegido)].filter(x => lsGet(LECTORES[x].clave, ''));
   if (!orden.length) { abrir('#ov-ajustes'); toast('Primero pon la clave gratuita de ' + LECTORES[elegido].nombre); return; }
@@ -707,7 +766,7 @@ async function leerFactura() {
 $('#btn-leer').addEventListener('click', leerFactura);
 
 /* ---------- Con Claude (chat): se copian las reglas, Claude lee la foto y su respuesta se pega aquí ---------- */
-const INSTRUCCIONES_CLAUDE = () => REGLAS + '\n\n' + FORMATO_JSON +
+const INSTRUCCIONES_CLAUDE = () => REGLAS + '\n\n' + FORMATO_JSON() +
   '\n\nTe adjunto la factura (fotos o PDF). Devuélveme SOLO el JSON en un bloque de código, sin explicaciones.';
 async function copiar(texto) {
   try { await navigator.clipboard.writeText(texto); return true; } catch {}
@@ -718,6 +777,7 @@ async function copiar(texto) {
 // Al volver a esta página se mira el portapapeles: si está la respuesta copiada de Claude, se carga sola.
 let esperandoClaude = false;
 $('#btn-claude-copiar').addEventListener('click', async () => {
+  if (faltanReglas()) return;
   if (!archivos.length) return toast('Añade primero las fotos o el PDF de la factura');
   const texto = INSTRUCCIONES_CLAUDE();
   const copiado = await copiar(texto);   // por si Claude no recoge el texto al compartir
@@ -754,6 +814,7 @@ document.addEventListener('visibilitychange', async () => {
   catch (e) { toast(e instanceof SyntaxError ? 'La respuesta copiada está incompleta: cópiala entera otra vez' : e.message); }
 });
 $('#btn-claude-pegar').addEventListener('click', async () => {
+  if (faltanReglas()) return;
   $('#f-pegar').value = '';
   abrir('#ov-pegar');
   $('#f-pegar').value = await respuestaEnPortapapeles();
@@ -967,6 +1028,7 @@ $('#btn-drive').addEventListener('click', async () => {
     lsSet('facturasGuardadas', hist.slice(0, 50));
     pintarHistorial();
     toast(archivos.length ? 'Factura guardada en Drive' : 'Cálculo guardado en Drive (la factura original ya no estaba cargada)');
+    sincronizarReglas();
   } catch (e) {
     toast('No se pudo guardar: ' + (e?.message || e));
   } finally {
@@ -1043,7 +1105,10 @@ $('#btn-borrar-clave').addEventListener('click', () => { try { localStorage.remo
   lsSet('lector', e.target.value); pintarAjustes();
   if (!lsGet(LECTORES[e.target.value].clave, '')) toast('Falta la clave de ' + LECTORES[e.target.value].nombre + ': ponla en Ajustes');
 }));
-$('#btn-drive-conectar').addEventListener('click', () => DrivePedidos.connect().then(() => { pintarAjustes(); toast('Drive conectado'); }, e => toast(e.message)));
+$('#btn-drive-conectar').addEventListener('click', () => DrivePedidos.connect().then(() => { pintarAjustes(); toast('Drive conectado'); sincronizarReglas(); }, e => toast(e.message)));
+$('#btn-reglas').addEventListener('click', () => DrivePedidos.connect().then(sincronizarReglas).then(
+  ok => toast(ok ? 'Reglas de márgenes cargadas' : 'No están en Drive: abre Facturas en un dispositivo que ya las tenga y conéctalo a Drive'),
+  e => toast(e.message)));
 
 $('#btn-nueva').addEventListener('click', () => {
   if (F && !confirm('¿Empezar una factura nueva? Se borra la que está en pantalla (lo guardado en Drive no se toca).')) return;
@@ -1051,6 +1116,9 @@ $('#btn-nueva').addEventListener('click', () => {
 });
 
 /* ---------- Inicio ---------- */
+{ const r = REGLAS_INCLUIDAS || lsGet('reglasMargenes', null); if (reglasValidas(r)) aplicarReglas(r); }
+pintarReglas();
+sincronizarReglas();
 pintarHistorial();
 pintarAjustes();   // rellena la IA y el modelo elegidos junto a "Leer factura"
 pintar();
