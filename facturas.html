@@ -233,89 +233,9 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } ca
 /* ---------- Márgenes (mismas reglas que el Director de Tarificación) ----------
    Las reglas de márgenes se guardan en Google Drive (PEDIDOS / CONFIGURACION / reglas-margenes.json) y
    cada dispositivo se queda una copia al conectar con Drive, para que no estén a la vista en esta página.
-   PASO 1 (provisional): siguen incluidas aquí abajo y la página las copia a Drive si allí no están.
-   En el paso 2 se quita REGLAS_INCLUIDAS (se deja en null) y la página usa solo las de Drive. */
-const REGLAS_INCLUIDAS = {
-  version: 1,
-  cats: [
-  ['Limpieza e higiene', [
-    ['limpieza_marca', 'Marca especial (Dos Rosas, 2R, La Salud, IFA, Eliges)', 65],
-    ['limpieza_21', 'Limpieza/higiene IVA 21%', 60],
-    ['limpieza_10', 'Limpieza/higiene IVA 10%', 45],
-    ['limpieza_4', 'Limpieza/higiene IVA 4%', 35],
-    ['indasec', 'Higiene femenina Indasec/Indasbed', 50],
-    ['compresas', 'Higiene femenina: resto de compresas', 55],
-    ['lacas', 'Lacas', 50]]],
-  ['Bebidas', [
-    ['refrescos_alcohol', 'Refrescos y alcohol', 50],
-    ['aguas_zumos', 'Aguas y zumos', 40],
-    ['cafes', 'Cafés', 35]]],
-  ['Lácteos', [
-    ['leche', 'Leche', 25],
-    ['leche_calcio', 'Leche con calcio', 35],
-    ['reina', 'Reina', 40],
-    ['natas', 'Natas y derivados', 40]]],
-  ['Dulces, básicos y general', [
-    ['disgodul', 'Disgodul', 50],
-    ['navidad', 'Navidad / Irineo / Mazapanes', 40],
-    ['harinas_azucar', 'Harinas / Azúcar', 30],
-    ['arroces', 'Arroces', 40],
-    ['animales', 'Animales (comida, snacks y arena)', 50],
-    ['comestibles', 'Comestibles generales', 40],
-    ['chocolates', 'Chocolates', 40],
-    ['comestibles_ifa', 'Comestibles IFA', 40],
-    ['pizzas', 'Pizzas', 40]]],
-  ['Congelados', [
-    ['congelados_10', 'Congelados IVA 10%', 40],
-    ['congelados_4', 'Congelados IVA 4%', 35],
-    ['gambon', 'Gambón', 35],
-    ['gamba', 'Gamba y langostino', 40],
-    ['helados', 'Helados', 40],
-    ['bloques_helado', 'Bloques de helado', 35],
-    ['croquetas', 'Croquetas', 40]]],
-  ['Carnes y embutidos', [
-    ['carnes', 'Carnes', 50],
-    ['quesos', 'Quesos', 35],
-    ['gran_embutido', 'Gran embutido', 60],
-    ['lacon', 'Lacón', 60],
-    ['jamon_serrano', 'Jamón serrano', 65],
-    ['jamon_iberico', 'Jamón ibérico', 80],
-    ['lomo', 'Lomo cebo y bellota', 40]]],
-  ['Sin regla', [['sin_regla', 'Sin regla: elige el margen', null]]]
-],
-  margenes: [25, 30, 35, 40, 45, 50, 55, 60, 65, 80],
-  reglas: `Eres el director de tarificación de un supermercado (La Tienda Nueva, Tembleque). Lees facturas, albaranes o listas de proveedores y clasificas cada producto en su categoría de margen. La app calcula después el precio; tú no calculas precios.
-
-LEER LA FACTURA
-- Transcribe cada línea de producto: descripción tal cual, código de barras si aparece (EAN; si no, cadena vacía), cantidad comprada (0 si no aparece), precio base e IVA (%; 0 si no aparece).
-- Precio base = precio unitario neto de la línea tal como figura (después del descuento de la línea si lo hay). No sumes ni restes IVA. Si la factura da precio por caja y por unidad, usa el de la unidad de venta.
-- No inventes nada. Si un número es ilegible, está cortado o la coma es ambigua (¿1,50 o 15,0?), pon tu mejor lectura, dudoso=true y explica el motivo.
-- Si un mismo producto aparece varias veces al mismo precio, ponlo una sola vez.
-- Ignora portes, envases retornables, recargos, ecotasas y líneas que no son productos.
-- Si la factura indica "Página X de Y" y faltan páginas, añádelo en avisos.
-- Fecha en formato AAAA-MM-DD (cadena vacía si no aparece). Proveedor: nombre comercial corto.
-
-CLASIFICAR (gana la regla más específica, en este orden)
-1. Marca especial de limpieza/higiene (Dos Rosas, 2R., La Salud, IFA, Eliges) → limpieza_marca (65%). Gana siempre en limpieza e higiene, incluida higiene femenina. No en productos para animales.
-2. Producto específico (gambón, gamba, langostino, croquetas, quesos, leche, jamón ibérico, bloques de helado, pizzas…) gana a la categoría general (croquetas congeladas → croquetas).
-3. Categoría general por IVA (limpieza por IVA, congelados por IVA, bebidas por IVA).
-Si sigue habiendo duda real, elige la más probable y marca dudoso=true con el motivo, o usa sin_regla.
-
-Categorías:
-- Limpieza e higiene: limpieza_marca 65%; limpieza_21 (IVA 21%) 60%; limpieza_10 (IVA 10%) 45%; limpieza_4 (IVA 4%) 35%; indasec (Indasec/Indasbed) 50%; compresas (resto de compresas) 55%; lacas 50%.
-- Bebidas (manda el tipo; si no está claro, IVA 21% → refrescos_alcohol, IVA 10% → aguas_zumos): refrescos_alcohol 50%; aguas_zumos 40%; cafes 35%. Bebidas IFA/Eliges siguen la regla de bebidas: vino, gaseosa y refrescos al 50%, zumos y aguas al 40%.
-- Lácteos: leche (líquida: entera, semi, desnatada, sin lactosa, también IFA/Eliges) 25%; leche_calcio ("CALCIO" en el nombre) 35%; reina 40%; natas (natas y derivados) 40%. Leche condensada, en polvo, bebidas vegetales o leche infantil no tienen regla: sin_regla o dudoso.
-- Dulces, básicos y general: disgodul 50%; navidad (Navidad, Irineo, mazapanes, turrones, mantecados, polvorones, dulces navideños) 40%; harinas_azucar 30%; arroces (cualquier arroz) 40%; animales (comida, snacks y arena, también IFA Amigo) 50%; comestibles (comestibles generales) 40%; chocolates 40%; comestibles_ifa 40%; pizzas 40%.
-- Congelados: congelados_10 (IVA 10%) 40%; congelados_4 (IVA 4%) 35%; gambon 35%; gamba (gamba y langostino) 40%; helados 40%; bloques_helado 35%; croquetas 40%. Los preparados congelados con jamón en el nombre (p. ej. Mahesito jamón serrano de Maheso) son congelados, no jamón.
-- Carnes y embutidos: carnes 50%; quesos 35%; gran_embutido 60% (si no estás seguro de que sea gran embutido —paleta ibérica, carne congelada…— marca dudoso); lacon 60%; jamon_serrano 65%; jamon_iberico 80%; lomo (lomo cebo y bellota) 40%.
-
-Decisiones ya confirmadas por el dueño: arroz (SOS y cualquier arroz) → arroces; Mahesitos Maheso → congelados_10; vino blanco Eliges (brik) → refrescos_alcohol; gaseosa IFA-Eliges → refrescos_alcohol; arena de gatos IFA Amigo → animales.
-
-Notas de proveedores:
-- Cafés Mora (Mora, Toledo): la columna "Tipo IVA" usa códigos 1 = 10%, 2 = 21%, 3 = 4%. Suele tener varias páginas.
-- Disycash VII: el precio es por unidad de venta (pack o unidad según el producto); la columna %IVA viene explícita.
-- Congelados El Músico: el IVA no aparece por línea, solo en el resumen de bases (10% y 4%). Deduce qué productos van al 4% cuadrando sus importes con la base al 4% (normalmente verduras como guisantes y espinacas).`
-};
+   Para cambiar un margen se edita ese archivo de Drive; los dispositivos lo recogen al conectar con Drive.
+   REGLAS_INCLUIDAS queda en null a propósito: aquí no debe volver a escribirse ninguna regla. */
+const REGLAS_INCLUIDAS = null;
 let CATS = [], CAT = {}, MARGENES = [], REGLAS = '';
 
 const SCHEMA = {
