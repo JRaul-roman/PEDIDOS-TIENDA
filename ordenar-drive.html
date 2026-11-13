@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ordenar pedidos en Drive</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f5f5f4; color: #1c1917; margin: 0; padding: 24px 16px; }
+  main { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 8px; }
+  p { line-height: 1.5; }
+  button { font-size: 1.2rem; font-weight: 700; padding: 18px 24px; width: 100%; border: 0; border-radius: 12px; background: #4f46e5; color: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  pre { background: #fff; border: 1px solid #d6d3d1; border-radius: 8px; padding: 12px; white-space: pre-wrap; font-size: .9rem; min-height: 3em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Ordenar los pedidos de Drive por proveedor</h1>
+  <p>Mueve cada PDF de <b>PEDIDOS / PEDIDOS GENERAL</b> y <b>PEDIDOS / PEDIDOS PROVEEDORES</b> a la carpeta de su proveedor. Página de un solo uso.</p>
+  <button id="ir">Ordenar las dos carpetas</button>
+  <pre id="log"></pre>
+</main>
+<script src="drive-pedidos.js"></script>
+<script>
+const log = t => { document.getElementById('log').textContent += t + '\n'; };
+const general = n => { const m = /^Pedido_(.+)_\d{4}-\d{2}-\d{2}(?: \(\d+\))?\.pdf$/i.exec(n || ''); if (!m) return null; return m[1] === 'tienda' ? 'SIN PROVEEDOR' : m[1].replace(/_/g, ' ').toUpperCase(); };
+const proveedores = n => { const m = /^(.+) \d{4}-\d{2}-\d{2}(?: \(\d+\))?\.pdf$/i.exec(n || ''); return m ? (m[1].trim().toUpperCase().replace(/[\/\\]+/g, '-') || 'SIN PROVEEDOR') : null; };
+const CARPETAS = [['PEDIDOS GENERAL', general], ['PEDIDOS PROVEEDORES', proveedores]];
+document.getElementById('ir').addEventListener('click', async e => {
+  const b = e.currentTarget; b.disabled = true;
+  try {
+    await DrivePedidos.ensure(true);
+    for (const [carpeta, prov] of CARPETAS) {
+      const sueltos = (await DrivePedidos.listFiles(carpeta)).filter(f => prov(f.name));
+      log(`${carpeta}: ${sueltos.length} PDF sueltos`);
+      let n = 0;
+      for (const f of sueltos) {
+        await DrivePedidos.moveFile(f.id, carpeta + '/' + prov(f.name));
+        if (++n % 10 === 0) log(`  ${n} de ${sueltos.length}…`);
+      }
+      log(`  Movidos ${n}.`);
+    }
+    log('LISTO');
+    document.title = 'LISTO - Ordenar pedidos';
+  } catch (err) {
+    log('ERROR: ' + err.message);
+    b.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
