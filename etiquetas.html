@@ -155,6 +155,7 @@ textarea.in{min-height:180px;font:13px/1.4 ui-monospace,Consolas,monospace}
     <div class="card-head"><h2>1. Buscar o escanear producto</h2>
       <div class="row">
         <button class="btn sm" id="btn-mod">Artículos modificados</button>
+        <button class="btn sm" id="btn-15">Últimos 15 días</button>
         <button class="btn sm" id="btn-cambios">Precios cambiados</button>
         <button class="btn sm" id="btn-pegar">Pegar lista</button>
       </div>
@@ -562,27 +563,53 @@ async function cargarModificados(url) {   // url: la de "Actualización Artícul
   } catch { if (url) return cargarModificados(); dias = []; }
   const hoy = dias.find(x => x.fecha === hoyIso());
   $('#btn-mod').textContent = hoy ? `Artículos modificados (${hoy.articulos.length} hoy)` : 'Artículos modificados';
+  quince = ultimosDias(15);
+  $('#btn-15').textContent = quince.articulos.length ? `Últimos 15 días (${quince.articulos.length})` : 'Últimos 15 días';
+}
+/* Últimos N días (hoy incluido) en una sola lista: cada artículo una vez, con su último precio, el precio que tenía
+   antes del primer cambio y la fecha del último. Si se creó en esos días, sale como NUEVO. */
+let quince = { articulos: [] };
+const fechaCorta = f => /^\d{4}-\d{2}-\d{2}$/.test(f) ? f.slice(8, 10) + '/' + f.slice(5, 7) : '';
+function ultimosDias(n) {
+  const d = new Date(); d.setDate(d.getDate() - (n - 1));
+  const desde = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const porArt = new Map();
+  for (const dia of dias.filter(x => x.fecha >= desde).sort((a, b) => a.fecha.localeCompare(b.fecha))) {   // del más antiguo al más reciente
+    for (const a of dia.articulos) {
+      const k = a.d + '\u0000' + a.c, v = porArt.get(k);
+      if (v) Object.assign(v, { ahora: a.ahora, fam: a.fam, f: dia.fecha, ultimo: a.m, nuevo: v.nuevo || a.m === 'NUEVO' });
+      else porArt.set(k, { ...a, f: dia.fecha, ultimo: a.m, nuevo: a.m === 'NUEVO' });
+    }
+  }
+  const articulos = [...porArt.values()].map(v => {
+    if (v.nuevo) return { ...v, m: 'NUEVO', antes: null };
+    const a0 = typeof v.antes === 'number' ? v.antes : null, a1 = typeof v.ahora === 'number' ? v.ahora : null;
+    return { ...v, m: a0 != null && a1 != null && a0 !== a1 ? (a1 > a0 ? 'SUBE' : 'BAJA') : v.ultimo };
+  }).sort((x, y) => x.fam.localeCompare(y.fam, 'es') || x.d.localeCompare(y.d, 'es'));
+  return { fecha: n + 'd', nombre: `los últimos ${n} días`, varios: true, articulos };
 }
 function pintarDias(sel) {
-  $('#mod-dia').innerHTML = dias.length ? dias.map((x, i) => `<option value="${i}">${esc(nombreDia(x.fecha))} · ${x.articulos.length} artículo${x.articulos.length === 1 ? '' : 's'}</option>`).join('')
+  $('#mod-dia').innerHTML = dias.length ? `<option value="15d">Últimos 15 días · ${quince.articulos.length} artículo${quince.articulos.length === 1 ? '' : 's'}</option>`
+      + dias.map((x, i) => `<option value="${i}">${esc(nombreDia(x.fecha))} · ${x.articulos.length} artículo${x.articulos.length === 1 ? '' : 's'}</option>`).join('')
     : '<option value="">Todavía no hay listas en la web: abre un archivo de la carpeta</option>';
-  $('#mod-dia').value = dias.length ? String(sel || 0) : '';
+  $('#mod-dia').value = dias.length ? String(sel ?? 0) : '';
+  if (dias.length && !$('#mod-dia').value) $('#mod-dia').value = '0';
   pintarDia();
 }
-const diaActual = () => dias[+$('#mod-dia').value] || null;
+const diaActual = () => $('#mod-dia').value === '15d' ? quince : (dias[+$('#mod-dia').value] || null);
 function enGlop(a) { return productos.find(x => x.d === a.d && (x.c || x.o) === a.c) || (a.c && porCodigo.get(a.c)) || null; }
 function pintarDia() {
   const dia = diaActual();
   $('#mod-todos').disabled = !dia;
   if (!dia) { $('#mod-lista').innerHTML = ''; $('#mod-resumen').textContent = ''; return; }
   const n = dia.articulos.filter(a => a.m === 'NUEVO').length;
-  $('#mod-resumen').textContent = `${dia.nombre}: ${n} nuevo${n === 1 ? '' : 's'} y ${dia.articulos.length - n} con precio cambiado`;
+  $('#mod-resumen').textContent = `${dia.varios ? 'En ' + dia.nombre : dia.nombre}: ${n} nuevo${n === 1 ? '' : 's'} y ${dia.articulos.length - n} con precio cambiado`;
   $('#mod-lista').innerHTML = dia.articulos.map((a, i) => {
     const g = enGlop(a);
     const ahora = g ? g.p : a.ahora;
     const otro = g && a.ahora != null && Math.abs(g.p - a.ahora) > 0.001 ? `<span class="badge">ahora en Glop: ${fmt(g.p)}</span>` : '';
     const cls = a.m === 'NUEVO' ? ' nuevo' : a.m === 'BAJA' ? ' baja' : '';
-    return `<div class="it" data-i="${i}"><div class="d"><b>${esc(a.d)}</b><span>${esc(a.c || 'sin código')} · ${esc(a.fam)}</span><span class="badge${cls}">${esc(a.m)}</span>${otro}</div>
+    return `<div class="it" data-i="${i}"><div class="d"><b>${esc(a.d)}</b><span>${esc(a.c || 'sin código')} · ${esc(a.fam)}${dia.varios && a.f ? ' · ' + fechaCorta(a.f) : ''}</span><span class="badge${cls}">${esc(a.m)}</span>${otro}</div>
       <div class="p">${a.antes != null && a.antes !== '' ? `<small>${esc(precioTxt(a.antes))}</small>` : ''}${fmt(ahora)} €</div><button class="add" aria-label="Añadir">+</button></div>`;
   }).join('') || '<div class="empty">Este archivo no tiene artículos.</div>';
 }
@@ -591,6 +618,7 @@ function anadirModificado(a) {
   if (g) anadir(g); else anadir({ d: a.d, c: a.c, o: '', p: num(a.ahora) ?? 0 }, { glop: null });
 }
 $('#btn-mod').onclick = async () => { $('#ov-mod').classList.add('on'); await cargarModificados(); pintarDias(); };
+$('#btn-15').onclick = async () => { $('#ov-mod').classList.add('on'); await cargarModificados(); pintarDias('15d'); };
 $('#mod-dia').onchange = pintarDia;
 $('#mod-lista').addEventListener('click', e => {
   if (!e.target.classList.contains('add')) return;
@@ -883,7 +911,7 @@ $('#btn-act').onclick = async () => {
     try { await cargar(RAW_GITHUB + r.commit + '/pvp.json', r.leido); }
     catch { await cargar(); }   // la de esta web, que puede tardar un par de minutos en tener lo último
     await cargarModificados(RAW_GITHUB + r.commit + '/modificados.json');
-    if ($('#ov-mod').classList.contains('on')) pintarDias(+$('#mod-dia').value || 0);
+    if ($('#ov-mod').classList.contains('on')) pintarDias($('#mod-dia').value || 0);
     const hoy = dias.find(x => x.fecha === hoyIso());
     toast(`✓ Actualizado${hoy ? `: ${hoy.articulos.length} artículo${hoy.articulos.length === 1 ? '' : 's'} modificado${hoy.articulos.length === 1 ? '' : 's'} hoy` : ''}`);
   } catch (e) {
