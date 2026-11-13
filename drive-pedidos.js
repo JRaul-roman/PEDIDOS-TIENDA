@@ -1,4 +1,4 @@
-/* Guardado de pedidos en Google Drive (carpeta PEDIDOS/<subcarpeta>)
+/* Guardado de pedidos en Google Drive (carpeta PEDIDOS/<subcarpeta>, que puede ser una ruta como 'PEDIDOS GENERAL/DANONE')
    Usado por PEDIDOS 2.0 y por Pedidos por proveedor.
    Solo pide el permiso "drive.file": la app únicamente ve los archivos y carpetas que crea ella. */
 (function () {
@@ -104,6 +104,26 @@
     return id;
   }
 
+  // Ruta dentro de PEDIDOS: 'A/B' crea (o encuentra) PEDIDOS/A/B. Devuelve el id de la última carpeta.
+  async function dir(path) {
+    let id = await folder(ROOT_NAME, 'root');
+    for (const name of String(path).split('/').map(s => s.trim()).filter(Boolean)) id = await folder(name, id);
+    return id;
+  }
+
+  // Deja el archivo solo dentro de la carpeta parent. Devuelve su id, o null si está en la papelera.
+  async function moveInto(id, parent) {
+    const f = await gfetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=id,trashed,parents`);
+    if (f.trashed) return null;
+    const parents = f.parents || [], others = parents.filter(p => p !== parent);
+    if (others.length || !parents.includes(parent)) {
+      await gfetch(`https://www.googleapis.com/drive/v3/files/${id}?addParents=${parent}&removeParents=${others.join(',')}&fields=id`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{}'
+      });
+    }
+    return f.id;
+  }
+
   function multipart(meta, blob) {
     const fd = new FormData();
     fd.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
@@ -125,16 +145,16 @@
     // Prepara el permiso al pulsar Guardar (dentro del clic). Devuelve una promesa.
     ensure: interactive => (CLIENT_ID && !st.off) ? getToken(interactive) : Promise.reject(new Error('Drive no conectado')),
     /** Crea (o encuentra) PEDIDOS/<subfolder> en Drive. Devuelve el id de la subcarpeta. */
-    async prepare(subfolder) { return folder(subfolder, await folder(ROOT_NAME, 'root')); },
-    /** Sube (o reemplaza) un PDF en PEDIDOS/<subfolder>. Devuelve el id del archivo en Drive. */
+    async prepare(subfolder) { return dir(subfolder); },
+    /** Sube (o reemplaza) un PDF en PEDIDOS/<subfolder>. Si ya existía en otra carpeta, lo mueve ahí. Devuelve el id del archivo en Drive. */
     async uploadPdf(subfolder, filename, blob, existingId) {
-      const parent = await folder(subfolder, await folder(ROOT_NAME, 'root'));
+      const parent = await dir(subfolder);
       if (existingId) {
         try {
           const f = await gfetch(`https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart&fields=id,trashed`, {
             method: 'PATCH', body: multipart({ name: filename }, blob)
           });
-          if (!f.trashed) return f.id;
+          if (!f.trashed) return (await moveInto(f.id, parent)) || f.id;
         } catch (e) { if (/caducada/.test(e.message)) throw e; }
       }
       const f = await gfetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
@@ -144,7 +164,7 @@
     },
     /** Crea un archivo JSON nuevo en PEDIDOS/<subfolder>. Devuelve su id en Drive. */
     async uploadJson(subfolder, filename, obj) {
-      const parent = await folder(subfolder, await folder(ROOT_NAME, 'root'));
+      const parent = await dir(subfolder);
       const blob = new Blob([JSON.stringify(obj, null, 1)], { type: 'application/json' });
       const f = await gfetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
         method: 'POST', body: multipart({ name: filename, parents: [parent], mimeType: 'application/json' }, blob)
@@ -155,11 +175,13 @@
     readJson: id => gfetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, { cache: 'no-store' }),
     /** Busca un archivo por nombre en PEDIDOS/<subfolder> (solo ve los que ha creado la app). Devuelve el id del más antiguo o null. */
     async findFile(subfolder, filename) {
-      const parent = await folder(subfolder, await folder(ROOT_NAME, 'root'));
+      const parent = await dir(subfolder);
       const q = encodeURIComponent(`name='${filename.replace(/'/g, "\\'")}' and trashed=false and '${parent}' in parents`);
       const r = await gfetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&orderBy=createdTime&spaces=drive`);
       return r.files?.[0]?.id || null;
     },
+    /** Mueve un archivo creado por la app a PEDIDOS/<subfolder>. Devuelve su id, o null si está en la papelera. */
+    moveFile: async (id, subfolder) => moveInto(id, await dir(subfolder)),
     /** Reescribe el contenido de un archivo JSON creado por la app. */
     updateJson: (id, obj) => gfetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media&fields=id`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(obj, null, 1)

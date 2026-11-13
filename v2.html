@@ -1132,6 +1132,9 @@ function buildPDF(o) {
 
 /* ---------- Google Drive ---------- */
 const DRIVE_FOLDER = 'PEDIDOS GENERAL';
+// Cada pedido va a PEDIDOS GENERAL / <PROVEEDOR> (mismo nombre que en el archivo, en mayúsculas y sin tildes).
+const provFolder = o => o.provider?.name?.trim() ? safeName(o.provider.name).replace(/_/g, ' ').toUpperCase() : 'SIN PROVEEDOR';
+const driveDir = o => DRIVE_FOLDER + '/' + provFolder(o);
 const driveOn = () => window.DrivePedidos && DrivePedidos.status().configured && DrivePedidos.status().connected;
 
 // interactive=true solo desde un clic: puede abrir la ventana de Google si la sesión ha caducado.
@@ -1143,27 +1146,43 @@ function syncDrive(orders, interactive) {
     .then(async () => {
       if (!window.jspdf) throw new Error('no se pudo generar el PDF');
       for (const o of orders) {
-        o.driveId = await DrivePedidos.uploadPdf(DRIVE_FOLDER, fileBase(o) + '.pdf', buildPDF(o).output('blob'), o.driveId);
+        o.driveId = await DrivePedidos.uploadPdf(driveDir(o), fileBase(o) + '.pdf', buildPDF(o).output('blob'), o.driveId);
         o.drive = 'ok';
         store.set(K.hist, S.history);
       }
-      if (interactive) toast(orders.length === 1 ? 'Guardado también en Google Drive' : `Subidos ${orders.length} pedidos a Google Drive`, { type: 'ok' });
+      if (interactive) toast(orders.length === 1 ? `Guardado también en Google Drive (PEDIDOS / ${driveDir(orders[0]).replace('/', ' / ')})` : `Subidos ${orders.length} pedidos a Google Drive`, { type: 'ok' });
+      ordenarDrive();
     })
     .catch(e => { if (interactive) toast(`No se pudo subir a Drive (${e.message}). Queda pendiente y se reintentará.`, { type: 'warn', timeout: 7000 }); })
     .finally(() => { store.set(K.hist, S.history); renderHistory(); renderDriveStatus(); });
 }
 const pendingDrive = () => S.history.filter(o => o.drive === 'pend');
 
+// Una vez por aparato: mueve los PDF ya subidos (antes iban todos juntos) a la carpeta de su proveedor.
+const DRIVE_ORDEN = 'pt_drive_por_proveedor';
+let ordenando = false;
+async function ordenarDrive() {
+  if (ordenando || store.get(DRIVE_ORDEN, false) || !driveOn() || !DrivePedidos.status().active) return;
+  ordenando = true;
+  try {
+    for (const o of S.history.filter(o => o.driveId)) {
+      try { await DrivePedidos.moveFile(o.driveId, driveDir(o)); }
+      catch (e) { if (/caducada|Failed to fetch|NetworkError/i.test(e.message)) throw e; } // otro error (p. ej. borrado): se salta
+    }
+    store.set(DRIVE_ORDEN, true);
+  } catch {} finally { ordenando = false; }
+}
+
 function renderDriveStatus() {
   const box = $('#set-drive'); if (!box || !window.DrivePedidos) return;
   const st = DrivePedidos.status(), pend = pendingDrive().length;
   if (!st.configured) { box.innerHTML = '<p class="help">Pendiente de configurar el permiso de Google.</p>'; return; }
   box.innerHTML = st.connected
-    ? `<p class="help">✓ Conectado a <b>${esc(st.account)}</b>. Cada pedido que guardes se sube en PDF a <b>PEDIDOS / ${DRIVE_FOLDER}</b> de ese Drive (la primera vez Google pedirá permiso).${pend ? ` Pendientes de subir: <b>${pend}</b>.` : ''}</p>
+    ? `<p class="help">✓ Conectado a <b>${esc(st.account)}</b>. Cada pedido que guardes se sube en PDF a <b>PEDIDOS / ${DRIVE_FOLDER} / <i>proveedor</i></b> de ese Drive (la primera vez Google pedirá permiso).${pend ? ` Pendientes de subir: <b>${pend}</b>.` : ''}</p>
        <div class="row-btns">${pend ? `<button class="btn btn-primary" data-drive="sync">${icon('upload')}Subir pendientes</button>` : ''}
        <button class="btn" data-drive="all">${icon('upload')}Subir todo el historial</button>
        <button class="btn btn-danger" data-drive="off">Desconectar</button></div>`
-    : `<p class="help">Guarda automáticamente cada pedido en PDF en la carpeta <b>PEDIDOS / ${DRIVE_FOLDER}</b> de tu Google Drive. Solo tendrá acceso a los archivos que cree.</p>
+    : `<p class="help">Guarda automáticamente cada pedido en PDF en la carpeta <b>PEDIDOS / ${DRIVE_FOLDER}</b> de tu Google Drive, con una carpeta para cada proveedor. Solo tendrá acceso a los archivos que cree.</p>
        <div class="row-btns"><button class="btn btn-primary" data-drive="on">${icon('upload')}Conectar con Google Drive</button></div>`;
 }
 
@@ -1982,6 +2001,7 @@ document.addEventListener('DOMContentLoaded', () => {
     DrivePedidos.onChange(renderDriveStatus);
     // Sube en segundo plano lo que quedó pendiente, solo si la sesión de Google sigue abierta
     if (driveOn() && DrivePedidos.status().active && pendingDrive().length) syncDrive(pendingDrive(), false);
+    else ordenarDrive();
   }
 });
 </script>
