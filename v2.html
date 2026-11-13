@@ -1151,26 +1151,35 @@ function syncDrive(orders, interactive) {
         store.set(K.hist, S.history);
       }
       if (interactive) toast(orders.length === 1 ? `Guardado también en Google Drive (PEDIDOS / ${driveDir(orders[0]).replace('/', ' / ')})` : `Subidos ${orders.length} pedidos a Google Drive`, { type: 'ok' });
-      ordenarDrive();
+      ordenarDrive().catch(() => {});
     })
     .catch(e => { if (interactive) toast(`No se pudo subir a Drive (${e.message}). Queda pendiente y se reintentará.`, { type: 'warn', timeout: 7000 }); })
     .finally(() => { store.set(K.hist, S.history); renderHistory(); renderDriveStatus(); });
 }
 const pendingDrive = () => S.history.filter(o => o.drive === 'pend');
 
-// Una vez por aparato: mueve los PDF ya subidos (antes iban todos juntos) a la carpeta de su proveedor.
-const DRIVE_ORDEN = 'pt_drive_por_proveedor';
-let ordenando = false;
-async function ordenarDrive() {
-  if (ordenando || store.get(DRIVE_ORDEN, false) || !driveOn() || !DrivePedidos.status().active) return;
-  ordenando = true;
-  try {
-    for (const o of S.history.filter(o => o.driveId)) {
-      try { await DrivePedidos.moveFile(o.driveId, driveDir(o)); }
-      catch (e) { if (/caducada|Failed to fetch|NetworkError/i.test(e.message)) throw e; } // otro error (p. ej. borrado): se salta
+// Mueve a la carpeta de su proveedor los PDF que estén sueltos en PEDIDOS / PEDIDOS GENERAL
+// (los de antes, subidos desde cualquier aparato). El proveedor sale del nombre: Pedido_<proveedor>_<aaaa-mm-dd>.pdf
+const provDeArchivo = nombre => {
+  const m = /^Pedido_(.+)_\d{4}-\d{2}-\d{2}(?: \(\d+\))?\.pdf$/i.exec(nombre || '');
+  if (!m) return null;
+  return m[1] === 'tienda' ? 'SIN PROVEEDOR' : m[1].replace(/_/g, ' ').toUpperCase();
+};
+let ordenando = null;
+function ordenarDrive(progreso) {
+  if (ordenando) return ordenando;
+  if (!driveOn() || !DrivePedidos.status().active) return Promise.resolve(0);
+  ordenando = (async () => {
+    const sueltos = (await DrivePedidos.listFiles(DRIVE_FOLDER)).filter(f => provDeArchivo(f.name));
+    let n = 0;
+    for (const [i, f] of sueltos.entries()) {
+      if (progreso) progreso(i + 1, sueltos.length);
+      try { await DrivePedidos.moveFile(f.id, DRIVE_FOLDER + '/' + provDeArchivo(f.name)); n++; }
+      catch (e) { if (/caducada|Failed to fetch|NetworkError/i.test(e.message)) throw e; }
     }
-    store.set(DRIVE_ORDEN, true);
-  } catch {} finally { ordenando = false; }
+    return n;
+  })().finally(() => { ordenando = null; });
+  return ordenando;
 }
 
 function renderDriveStatus() {
@@ -1181,6 +1190,7 @@ function renderDriveStatus() {
     ? `<p class="help">✓ Conectado a <b>${esc(st.account)}</b>. Cada pedido que guardes se sube en PDF a <b>PEDIDOS / ${DRIVE_FOLDER} / <i>proveedor</i></b> de ese Drive (la primera vez Google pedirá permiso).${pend ? ` Pendientes de subir: <b>${pend}</b>.` : ''}</p>
        <div class="row-btns">${pend ? `<button class="btn btn-primary" data-drive="sync">${icon('upload')}Subir pendientes</button>` : ''}
        <button class="btn" data-drive="all">${icon('upload')}Subir todo el historial</button>
+       <button class="btn" data-drive="ordenar">${icon('upload')}Ordenar por proveedor</button>
        <button class="btn btn-danger" data-drive="off">Desconectar</button></div>`
     : `<p class="help">Guarda automáticamente cada pedido en PDF en la carpeta <b>PEDIDOS / ${DRIVE_FOLDER}</b> de tu Google Drive, con una carpeta para cada proveedor. Solo tendrá acceso a los archivos que cree.</p>
        <div class="row-btns"><button class="btn btn-primary" data-drive="on">${icon('upload')}Conectar con Google Drive</button></div>`;
@@ -1967,6 +1977,13 @@ function bind() {
       .then(() => { toast(`Google Drive conectado: carpeta PEDIDOS / ${DRIVE_FOLDER} lista`, { type: 'ok', timeout: 6000 }); renderDriveStatus(); if (pendingDrive().length) syncDrive(pendingDrive(), false); })
       .catch(err => { toast('Google Drive: ' + err.message, { type: 'err', timeout: 12000 }); renderDriveStatus(); });
     else if (a === 'sync') syncDrive(pendingDrive(), true);
+    else if (a === 'ordenar') {
+      toast('Ordenando los pedidos de Drive por proveedor…', { timeout: 4000 });
+      DrivePedidos.ensure(true)
+        .then(() => ordenarDrive((i, n) => { if (i === 1 || i % 10 === 0) toast(`Ordenando pedidos en Drive… ${i} de ${n}`, { timeout: 3000 }); }))
+        .then(n => toast(n ? `Listo: ${plural(n, 'pedido movido', 'pedidos movidos')} a la carpeta de su proveedor (PEDIDOS / ${DRIVE_FOLDER})` : 'Ya estaba todo ordenado por proveedor', { type: 'ok', timeout: 8000 }))
+        .catch(e => toast('No se pudo ordenar Drive: ' + e.message, { type: 'err', timeout: 10000 }));
+    }
     else if (a === 'all') { if (confirm(`¿Subir los ${S.history.length} pedidos del historial a Google Drive?`)) syncDrive(S.history.slice(), true); }
     else if (a === 'off') { DrivePedidos.disconnect(); renderDriveStatus(); toast('Google Drive desconectado'); }
   });
@@ -2001,7 +2018,7 @@ document.addEventListener('DOMContentLoaded', () => {
     DrivePedidos.onChange(renderDriveStatus);
     // Sube en segundo plano lo que quedó pendiente, solo si la sesión de Google sigue abierta
     if (driveOn() && DrivePedidos.status().active && pendingDrive().length) syncDrive(pendingDrive(), false);
-    else ordenarDrive();
+    else ordenarDrive().catch(() => {});
   }
 });
 </script>

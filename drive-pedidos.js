@@ -180,6 +180,18 @@
       const r = await gfetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&orderBy=createdTime&spaces=drive`);
       return r.files?.[0]?.id || null;
     },
+    /** Archivos (no carpetas) que hay directamente en PEDIDOS/<subfolder> y que ha creado la app desde cualquier aparato: [{id, name}]. */
+    async listFiles(subfolder) {
+      const parent = await dir(subfolder), out = [];
+      const q = encodeURIComponent(`'${parent}' in parents and trashed=false and mimeType!='application/vnd.google-apps.folder'`);
+      let page = '';
+      do {
+        const r = await gfetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=nextPageToken,files(id,name)&pageSize=1000&spaces=drive${page ? '&pageToken=' + page : ''}`);
+        out.push(...(r.files || []));
+        page = r.nextPageToken || '';
+      } while (page);
+      return out;
+    },
     /** Mueve un archivo creado por la app a PEDIDOS/<subfolder>. Devuelve su id, o null si está en la papelera. */
     moveFile: async (id, subfolder) => moveInto(id, await dir(subfolder)),
     /** Reescribe el contenido de un archivo JSON creado por la app. */
