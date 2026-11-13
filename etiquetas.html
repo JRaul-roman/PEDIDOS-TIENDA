@@ -49,6 +49,16 @@ h2{font-size:16px;margin:0;font-weight:700}
 .brand{min-width:0;flex:1}
 .brand h1{font-size:20px;margin:0;font-weight:800;letter-spacing:-.02em}
 .brand p{margin:0;font-size:12.5px;opacity:.88}
+/* Actualización Artículos: el ordenador de la tienda lee Glop en el momento */
+.hero-inner{flex-wrap:wrap}
+.brand{flex:1 1 200px}
+.act{margin-left:auto;display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.18);color:#fff;border-radius:999px;padding:9px 15px 9px 12px;font-weight:700;font-size:14px;flex-shrink:0;transition:transform .08s,background .15s}
+.act:hover{background:rgba(255,255,255,.26)}
+.act:active{transform:scale(.97)}
+.act .ic{width:18px;height:18px}
+.act:disabled{opacity:.85;cursor:default}
+.act:disabled .ic{animation:gira 1s linear infinite}
+@keyframes gira{to{transform:rotate(360deg)}}
 .layout{max-width:1180px;margin:-42px auto 0;padding:0 16px;display:grid;gap:16px;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 @media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}}
 .full{grid-column:1/-1}
@@ -136,6 +146,7 @@ textarea.in{min-height:180px;font:13px/1.4 ui-monospace,Consolas,monospace}
   <div class="hero-inner">
     <div class="logo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 5v14M6 5v14M10 5v14M13 5v14M17 5v14M21 5v14"/></svg></div>
     <div class="brand"><h1>Etiquetas de estantería</h1><p class="estado" id="estado">Cargando precios de Glop…</p></div>
+    <button class="act" type="button" id="btn-act" title="El ordenador de la tienda lee Glop ahora mismo (también lo hace solo cada hora)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg><span id="btn-act-txt">Actualización Artículos</span></button>
   </div>
 </header>
 
@@ -350,12 +361,16 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } ca
 /* =================== Datos de Glop =================== */
 let productos = [];          // {d, c, o, p, iva, fam, n}
 const porCodigo = new Map();
-async function cargar() {
+// url y fecha: la lista recién leída de Glop con "Actualización Artículos" (si falla, se lanza el error)
+async function cargar(url, fecha) {
   try {
-    const r = await fetch('./pvp.json', { cache: 'no-cache' });
+    const r = await fetch(url || './pvp.json', { cache: 'no-cache' });
     if (!r.ok) throw new Error(r.status);
-    usarDatos(await r.json(), r.headers.get('last-modified'));
+    const datos = await r.json();
+    if (!Array.isArray(datos) || datos.length < 1000) throw new Error('lista incompleta');
+    usarDatos(datos, fecha || r.headers.get('last-modified'));
   } catch (e) {
+    if (url) throw e;
     $('#estado').innerHTML = 'No se pudo cargar pvp.json. <label style="text-decoration:underline;cursor:pointer">Elegir el archivo<input type="file" accept=".json" id="f-json" hidden></label>';
     $('#f-json').onchange = async ev => { const f = ev.target.files[0]; if (f) usarDatos(JSON.parse(await f.text()), f.lastModified); };
   }
@@ -538,13 +553,13 @@ const nombreDia = f => {
   return (f === hoyIso() ? 'Hoy, ' : '') + s;
 };
 const precioTxt = v => typeof v === 'number' ? fmt(v) : String(v ?? '').replace(/\./g, ',');
-async function cargarModificados() {
+async function cargarModificados(url) {   // url: la de "Actualización Artículos"; si falla, la de esta web
   try {
-    const r = await fetch('./modificados.json', { cache: 'no-cache' });
+    const r = await fetch(url || './modificados.json', { cache: 'no-cache' });
     if (!r.ok) throw new Error(r.status);
     dias = (await r.json()).map(x => ({ fecha: x.fecha, nombre: 'ARTICULOS MODIFICADOS ' + x.fecha,
       articulos: x.articulos.map(a => ({ m: a[0], d: String(a[1] || '').trim(), c: String(a[2] || '').trim(), antes: a[3], ahora: a[4], fam: a[5] || '' })) }));
-  } catch { dias = []; }
+  } catch { if (url) return cargarModificados(); dias = []; }
   const hoy = dias.find(x => x.fecha === hoyIso());
   $('#btn-mod').textContent = hoy ? `Artículos modificados (${hoy.articulos.length} hoy)` : 'Artículos modificados';
 }
@@ -833,6 +848,51 @@ $('#ti-si').onclick = () => {
   $('#tras-imprimir').style.display = 'none';
 };
 $('#ti-no').onclick = () => { $('#tras-imprimir').style.display = 'none'; };
+
+/* =================== Actualización Artículos: el ordenador de la tienda lee Glop ahora mismo (además de cada hora) ===================
+   Se deja una petición en Drive (PEDIDOS/CAMBIOS PRECIO), como los cambios de precio de Alta - Modificación Artículos;
+   vigilar-drive.ps1 ejecuta actualizar-catalogo.ps1 y contesta con el commit de GitHub. pvp.json y modificados.json se
+   leen de ese commit, porque Netlify tarda 1-2 minutos más en publicarlos. Lo mismo hay en alta.html. */
+const RAW_GITHUB = 'https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/';
+const espera = ms => new Promise(r => setTimeout(r, ms));
+let actualizando = false;
+$('#btn-act').onclick = async () => {
+  if (actualizando) return;
+  const st = window.DrivePedidos?.status();
+  if (!st?.configured || !st.connected) { toast('Google Drive está desconectado: conéctalo en Pedidos 2.0 → Ajustes'); return; }
+  actualizando = true;
+  const btn = $('#btn-act'), antes = $('#estado').textContent, t0 = Date.now();
+  const estado = m => { $('#estado').textContent = m; };
+  btn.disabled = true; $('#btn-act-txt').textContent = 'Actualizando…';
+  try {
+    await DrivePedidos.ensure(true);   // dentro del clic: puede abrir la ventana de Google
+    estado('Pidiendo los cambios al ordenador de la tienda…');
+    const sello = new Date(t0).toISOString().replace(/\D/g, '').slice(0, 14), k = t0.toString(36) + Math.random().toString(36).slice(2, 6);
+    const id = await DrivePedidos.uploadJson('CAMBIOS PRECIO', `actualizar-${sello}-${k}.json`,
+      { version: 1, tipo: 'actualizar-catalogo', estado: 'pendiente', creado: new Date(t0).toISOString(), app: 'etiquetas', dispositivo: matchMedia('(pointer:coarse)').matches ? 'tablet' : 'ordenador' });
+    let r = null;
+    while (Date.now() - t0 < 4 * 60000) {
+      await espera(4000);
+      estado(`Esperando al ordenador de la tienda… ${Math.round((Date.now() - t0) / 1000)} s`);
+      try { r = await DrivePedidos.readJson(id); } catch (e) { if (/caducada/.test(e.message)) throw e; continue; }
+      if (r?.estado === 'hecho' || r?.estado === 'error') break;
+    }
+    if (r?.estado === 'error') throw new Error(r.mensaje || 'el ordenador no ha podido leer Glop');
+    if (r?.estado !== 'hecho') throw new Error('el ordenador de la tienda no contesta (¿está encendido?)');
+    estado('Cargando los artículos de Glop…');
+    try { await cargar(RAW_GITHUB + r.commit + '/pvp.json', r.leido); }
+    catch { await cargar(); }   // la de esta web, que puede tardar un par de minutos en tener lo último
+    await cargarModificados(RAW_GITHUB + r.commit + '/modificados.json');
+    if ($('#ov-mod').classList.contains('on')) pintarDias(+$('#mod-dia').value || 0);
+    const hoy = dias.find(x => x.fecha === hoyIso());
+    toast(`✓ Actualizado${hoy ? `: ${hoy.articulos.length} artículo${hoy.articulos.length === 1 ? '' : 's'} modificado${hoy.articulos.length === 1 ? '' : 's'} hoy` : ''}`);
+  } catch (e) {
+    estado(antes);
+    toast('No se pudo actualizar: ' + e.message);
+  } finally {
+    actualizando = false; btn.disabled = false; $('#btn-act-txt').textContent = 'Actualización Artículos';
+  }
+};
 
 /* =================== Inicio =================== */
 cfgAInputs();
