@@ -6,7 +6,8 @@
    - Google (Drive, inicio de sesión), Groq, Gemini y todo lo que no sea una lectura (GET) no se toca.
    Para desactivarlo: publicar un sw.js que solo haga self.registration.unregister(). */
 const CACHE = 'tienda-v1';
-const PAGINAS = ['v2.html', 'alta.html', 'etiquetas.html', 'pan.html', 'facturas.html', 'drive-pedidos.js'];
+const PAGINAS = ['v2.html', 'alta.html', 'etiquetas.html', 'pan.html', 'drive-pedidos.js'];
+const RETIRADAS = ['facturas.html', 'facturas'];   // apps quitadas: se borra la copia guardada para que no sigan abriendo sin conexión
 const DATOS = ['barras.json', 'pvp.json', 'modificados.json'];
 const LIBRERIAS = [
   'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
@@ -47,6 +48,8 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     for (const k of await caches.keys()) if (k.startsWith('tienda-') && k !== CACHE) await caches.delete(k);
+    const cache = await caches.open(CACHE), base = new URL('./', self.location).href;
+    for (const f of RETIRADAS) await cache.delete(base + f);
     await self.clients.claim();
   })());
 });
