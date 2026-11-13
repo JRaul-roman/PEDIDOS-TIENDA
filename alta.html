@@ -24,6 +24,10 @@
   archivo con la respuesta, que aquí se va leyendo.
   pvp.json (lo sube cada hora el ordenador) es la lista de productos de Glop: búsqueda, familias y avisos de repetidos.
   #precio en la dirección abre directamente "Cambiar precio".
+  Desde "Cálculo precios" (claude.ai) se abre con el artículo y el precio ya puestos:
+    alta.html?cod=<código>&desc=<descripción de Glop>&precio=<PVP>#precio  → Cambiar precio con ese artículo elegido
+    alta.html?alta=1&cod=<código>&desc=<descripción>&precio=<PVP>           → Nuevo producto con esos datos
+  No se envía nada a Glop hasta que se pulsa el botón de siempre.
 -->
 <style>
 :root{
@@ -759,6 +763,37 @@ function prSelect(r) {
 }
 function prCloseCard() { PR.sel = null; const b = $('#pr-card'); b.hidden = true; b.innerHTML = ''; prSearch(); }
 
+/* ---------- Abrir con un artículo y un precio ya puestos (enlace desde "Cálculo precios") ---------- */
+const PRE = (() => {
+  const p = new URLSearchParams(location.search);
+  const cod = (p.get('cod') || '').trim().slice(0, 30), desc = (p.get('desc') || '').trim().slice(0, 120);
+  if (!cod && !desc) return null;
+  return { alta: p.get('alta') === '1', cod, desc, precio: parsePrecio(p.get('precio') || '') };
+})();
+function aplicarPrefill() {
+  if (!PRE) return;
+  history.replaceState(null, '', location.pathname + (PRE.alta ? '' : '#precio'));   // al recargar no se vuelve a rellenar
+  const precioTxt = PRE.precio == null ? '' : PRE.precio.toFixed(2).replace('.', ',');
+  if (PRE.alta) {
+    verTab('alta', false);
+    if (PRE.cod) $('#a-cod').value = PRE.cod;
+    if (PRE.desc) $('#a-desc').value = glopTxt(PRE.desc);
+    if (precioTxt) $('#a-pvp').value = precioTxt;
+    revisarCodigo(); revisarNombre(); revisarPrecio(true);
+    toast('Datos de Cálculo precios: revisa la descripción y elige la familia', { timeout: 6000 });
+    return;
+  }
+  verTab('precio', false);
+  const r = (PRE.cod && porCodigo(PRE.cod)) || (PRE.desc && A.byName.get(glopTxt(PRE.desc))) || null;
+  if (!r) {
+    $('#pr-search').value = PRE.cod || PRE.desc; prSearch();
+    toast('No encuentro ese artículo: elígelo en la lista' + (precioTxt ? ' (precio calculado: ' + precioTxt + ' €)' : ''), { type: 'warn', timeout: 7000 });
+    return;
+  }
+  prSelect(r);
+  if (precioTxt) { $('#pr-new').value = precioTxt; prDiff(); prBtnTxt(); }
+}
+
 function prDiff() {
   const r = PR.sel, el = $('#pr-diff'); if (!r || !el) return;
   const v = $('#pr-new').value.trim(), n = parsePrecio(v);
@@ -1073,7 +1108,7 @@ function init() {
   bind();
   pintarEnv(); prRenderEnv(); revisarCodigo(); revisarNombre(); prSearch();
   verTab(/^#precios?$/.test(location.hash) ? 'precio' : 'alta');
-  cargarGlop();
+  cargarGlop().then(aplicarPrefill);
   if (A.env.some(e => e.estado === 'esperando')) pollAltas(1500);
   if (PR.env.some(e => e.estado === 'esperando')) prPollSoon(1500);
 }
