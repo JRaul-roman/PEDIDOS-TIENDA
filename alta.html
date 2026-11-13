@@ -24,11 +24,11 @@
   archivo con la respuesta, que aquí se va leyendo.
   pvp.json (lo sube cada hora el ordenador) es la lista de productos de Glop: búsqueda, familias y avisos de repetidos.
   #precio en la dirección abre directamente "Cambiar precio".
-  Desde "Cálculo precios" (claude.ai) se abre con el artículo y el precio ya puestos:
+  Desde "Cálculo PVP" (claude.ai) se abre con el artículo y el precio ya puestos:
     alta.html?cod=<código>&desc=<descripción de Glop>&precio=<PVP>#precio  → Cambiar precio con ese artículo elegido
     alta.html?alta=1&cod=<código>&desc=<descripción>&precio=<PVP>           → Nuevo producto con esos datos
-  No se envía nada a Glop hasta que se pulsa el botón de siempre. Abierta así, arriba sale "Volver a Cálculo precios":
-  cierra esta pestaña (Cálculo precios sigue detrás, como se dejó) o, si el navegador no deja cerrarla, abre Cálculo precios.
+  No se envía nada a Glop hasta que se pulsa el botón de siempre. Abierta así, arriba sale "Volver a Cálculo PVP":
+  cierra esta pestaña (Cálculo PVP sigue detrás, como se dejó) o, si el navegador no deja cerrarla, abre Cálculo PVP.
 -->
 <style>
 :root{
@@ -79,7 +79,7 @@ h2 .ic{color:var(--primary)}
 .brand{min-width:0}
 .brand h1{font-size:20px;margin:0;font-weight:800;letter-spacing:-.02em}
 .brand p{margin:0;font-size:12.5px;opacity:.88;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* Volver a Cálculo precios (solo si se abrió desde allí) */
+/* Volver a Cálculo PVP (solo si se abrió desde allí) */
 .volver{display:inline-flex;align-items:center;gap:6px;margin:0 0 12px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.16);color:#fff;border-radius:999px;padding:8px 15px 8px 11px;font-weight:700;font-size:14px;transition:transform .08s,background .15s}
 .volver:hover{background:rgba(255,255,255,.24)}
 .volver:active{transform:scale(.97)}
@@ -239,7 +239,7 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
 <body>
 <header class="hero">
   <div class="hero-inner">
-    <button class="volver" type="button" id="volver" hidden><i data-ic="back"></i><span id="volver-txt">Volver a Cálculo precios</span></button>
+    <button class="volver" type="button" id="volver" hidden><i data-ic="back"></i><span id="volver-txt">Volver a Cálculo PVP</span></button>
     <div class="brand-row">
       <div class="logo"><i data-ic="box"></i></div>
       <div class="brand"><h1>Alta - Modificación Artículos</h1><p id="st-lista">Cargando productos de Glop…</p></div>
@@ -771,7 +771,7 @@ function prSelect(r) {
 }
 function prCloseCard() { PR.sel = null; const b = $('#pr-card'); b.hidden = true; b.innerHTML = ''; prSearch(); }
 
-/* ---------- Abrir con un artículo y un precio ya puestos (enlace desde "Cálculo precios") ---------- */
+/* ---------- Abrir con un artículo y un precio ya puestos (enlace desde "Cálculo PVP") ---------- */
 const PRE = (() => {
   const p = new URLSearchParams(location.search);
   const cod = (p.get('cod') || '').trim().slice(0, 30), desc = (p.get('desc') || '').trim().slice(0, 120);
@@ -788,7 +788,7 @@ function aplicarPrefill() {
     if (PRE.desc) $('#a-desc').value = glopTxt(PRE.desc);
     if (precioTxt) $('#a-pvp').value = precioTxt;
     revisarCodigo(); revisarNombre(); revisarPrecio(true);
-    toast('Datos de Cálculo precios: revisa la descripción y elige la familia', { timeout: 6000 });
+    toast('Datos de Cálculo PVP: revisa la descripción y elige la familia', { timeout: 6000 });
     return;
   }
   verTab('precio', false);
@@ -802,7 +802,7 @@ function aplicarPrefill() {
   if (precioTxt) { $('#pr-new').value = precioTxt; prDiff(); prBtnTxt(); }
 }
 
-/* Volver a Cálculo precios: la dirección con datos solo la pone esa app. Se recuerda en esta pestaña (sessionStorage),
+/* Volver a Cálculo PVP: la dirección con datos solo la pone esa app. Se recuerda en esta pestaña (sessionStorage),
    porque aplicarPrefill quita los datos de la dirección y la tablet puede recargar la pestaña. */
 const CALCULO_URL = 'https://claude.ai/artifact/U7rZ47TVrtSf18DiVqb8kE';
 const ABIERTA = Date.now();
@@ -821,12 +821,12 @@ async function volverCalculo() {
     if (enviando()) {
       $('#volver-txt').textContent = 'Terminando de enviar…';
       for (let i = 0; i < 60 && enviando(); i++) await espera(500);
-      $('#volver-txt').textContent = 'Volver a Cálculo precios';
+      $('#volver-txt').textContent = 'Volver a Cálculo PVP';
       if (enviando()) return toast('Todavía se está enviando: espera un poco y vuelve a pulsar', { type: 'warn' });
     }
     const fallidos = [...A.env, ...PR.env].filter(e => e.t >= ABIERTA && e.estado === 'no-enviado');
-    if (fallidos.length && !confirm(`No se ha podido enviar:\n${fallidos.map(e => '· ' + e.d).join('\n')}\n\n¿Volver a Cálculo precios igualmente?`)) return;
-    window.close();   // Cálculo precios sigue abierta en la otra pestaña, tal como se dejó
+    if (fallidos.length && !confirm(`No se ha podido enviar:\n${fallidos.map(e => '· ' + e.d).join('\n')}\n\n¿Volver a Cálculo PVP igualmente?`)) return;
+    window.close();   // Cálculo PVP sigue abierta en la otra pestaña, tal como se dejó
     await espera(400);
     if (!window.closed) location.href = CALCULO_URL;   // el navegador no deja cerrarla: se abre aquí
   } finally { volviendo = false; }
