@@ -84,6 +84,16 @@ h2 .ic{color:var(--primary)}
 .volver:hover{background:rgba(255,255,255,.24)}
 .volver:active{transform:scale(.97)}
 .volver .ic{width:18px;height:18px}
+/* Actualización Artículos: el ordenador de la tienda lee Glop en el momento */
+.brand-row{flex-wrap:wrap}
+.brand{flex:1 1 200px}
+.act{margin-left:auto;display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.18);color:#fff;border-radius:999px;padding:9px 15px 9px 12px;font-weight:700;font-size:14px;flex-shrink:0;transition:transform .08s,background .15s}
+.act:hover{background:rgba(255,255,255,.26)}
+.act:active{transform:scale(.97)}
+.act .ic{width:18px;height:18px}
+.act[disabled]{opacity:.85;cursor:default}
+.act[disabled] .ic{animation:gira 1s linear infinite}
+@keyframes gira{to{transform:rotate(360deg)}}
 /* Opciones: nuevo producto / cambiar precio */
 .tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:16px;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.2);border-radius:16px;padding:4px;max-width:520px}
 .tabs button{border:0;background:transparent;color:#fff;border-radius:12px;padding:10px 8px;font-weight:700;font-size:14.5px;display:flex;align-items:center;justify-content:center;gap:7px;opacity:.85}
@@ -243,6 +253,7 @@ dialog::backdrop{background:rgba(8,12,28,.55);backdrop-filter:blur(3px)}
     <div class="brand-row">
       <div class="logo"><i data-ic="box"></i></div>
       <div class="brand"><h1>Alta - Modificación Artículos</h1><p id="st-lista">Cargando productos de Glop…</p></div>
+      <button class="act" type="button" id="btn-act" title="El ordenador de la tienda lee Glop ahora mismo (también lo hace solo cada hora)"><i data-ic="refresh"></i><span id="btn-act-txt">Actualización Artículos</span></button>
     </div>
     <nav class="tabs" role="tablist" aria-label="Opciones">
       <button type="button" role="tab" data-tab="alta" class="on"><i data-ic="plus"></i>Nuevo producto</button>
@@ -374,6 +385,7 @@ const IC = {
   check: '<path d="M20 6 9 17l-5-5"/>',
   history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
   back: '<path d="M19 12H5M12 19l-7-7 7-7"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>'
 };
 const icon = n => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n] || ''}</svg>`;
@@ -421,12 +433,14 @@ const PR = { sel: null, results: [], tokens: [], env: [], over: {}, timer: null 
 const prKey = (d, c) => (c ? 'c:' + stripZeros(c) : '') + '|d:' + norm(d);
 
 /* ---------- Productos de Glop (pvp.json: [descripción, código, otro código, pvp, iva, familia]) ---------- */
-async function cargarGlop() {
+// fuente = {url, hora}: la lista recién leída de Glop con "Actualización Artículos" (si falla, se lanza el error)
+async function cargarGlop(fuente) {
   try {
-    const res = await fetch('pvp.json?_=' + Date.now(), { cache: 'no-store' });
+    const res = await fetch(fuente ? fuente.url : 'pvp.json?_=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    A.listed = Date.parse(res.headers.get('Last-Modified') || '') || 0;
+    if (!Array.isArray(data) || data.length < 1000) throw new Error('lista incompleta');
+    A.listed = fuente ? fuente.hora : Date.parse(res.headers.get('Last-Modified') || '') || 0;
     // Los cambios de precio hechos aquí se recuerdan hasta que llegan a pvp.json (se publica cada hora)
     const caduca = A.listed || Date.now() - 75 * 60000;
     for (const [k, o] of Object.entries(PR.over)) if (o.t < caduca) delete PR.over[k];
@@ -442,8 +456,9 @@ async function cargarGlop() {
     A.loaded = true;
     pintarFamilias();
     $('#st-lista').textContent = `${fmtN(A.rows.length)} productos en Glop` + (A.listed ? ` · lista de las ${new Date(A.listed).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}` : ' · la lista se actualiza cada hora');
-    revisarCodigo(); revisarNombre(); prSearch(); if (PR.sel) prSelect(PR.sel);
+    revisarCodigo(); revisarNombre(); prReabrir();
   } catch (e) {
+    if (fuente) throw e;
     $('#st-lista').textContent = 'No se pudo cargar la lista de Glop (' + e.message + ')';
     toast('Sin lista de productos de Glop: comprueba la conexión a internet.', { type: 'warn', timeout: 7000 });
     prSearch();
@@ -770,6 +785,15 @@ function prSelect(r) {
   if (!tactil() || A.tab === 'precio') $('#pr-new').focus();
 }
 function prCloseCard() { PR.sel = null; const b = $('#pr-card'); b.hidden = true; b.innerHTML = ''; prSearch(); }
+// Al recargar la lista, el producto abierto en "Cambiar precio" se vuelve a pintar con sus datos nuevos (sin perder el precio escrito)
+function prReabrir() {
+  if (!PR.sel) return prSearch();
+  const k = prKey(PR.sel.d, PR.sel.c), r = A.rows.find(x => prKey(x.d, x.c) === k);
+  if (!r) return prCloseCard();
+  const escrito = $('#pr-new')?.value || '';
+  prSelect(r);
+  if (escrito) { $('#pr-new').value = escrito; prDiff(); prBtnTxt(); }
+}
 
 /* ---------- Abrir con un artículo y un precio ya puestos (enlace desde "Cálculo PVP") ---------- */
 const PRE = (() => {
@@ -800,6 +824,48 @@ function aplicarPrefill() {
   }
   prSelect(r);
   if (precioTxt) { $('#pr-new').value = precioTxt; prDiff(); prBtnTxt(); }
+}
+
+/* ---------- Actualización Artículos: el ordenador de la tienda lee Glop ahora mismo (además de cada hora) ----------
+   Se deja una petición en Drive (PEDIDOS/CAMBIOS PRECIO), como los cambios de precio; vigilar-drive.ps1 ejecuta
+   actualizar-catalogo.ps1 y contesta con el commit de GitHub. La lista se lee de ese commit, porque Netlify tarda
+   1-2 minutos más en publicarla. Lo mismo hay en etiquetas.html. */
+const RAW_GITHUB = 'https://raw.githubusercontent.com/JRaul-roman/PEDIDOS-TIENDA/';
+let actualizando = false;
+async function actualizarArticulos() {
+  if (actualizando) return;
+  actualizando = true;
+  const btn = $('#btn-act'), antes = $('#st-lista').textContent, t0 = Date.now();
+  const estado = m => { $('#st-lista').textContent = m; };
+  btn.disabled = true; $('#btn-act-txt').textContent = 'Actualizando…';
+  try {
+    await prepararDrive(true);   // dentro del clic: puede abrir la ventana de Google
+    estado('Pidiendo los cambios al ordenador de la tienda…');
+    const k = t0.toString(36) + Math.random().toString(36).slice(2, 6);
+    const id = await DrivePedidos.uploadJson(FOLDER, `actualizar-${sello(t0)}-${k}.json`,
+      { version: 1, tipo: 'actualizar-catalogo', estado: 'pendiente', creado: new Date(t0).toISOString(), app: 'alta', dispositivo: tactil() ? 'tablet' : 'ordenador' });
+    let r = null;
+    while (Date.now() - t0 < 4 * 60000) {
+      await espera(4000);
+      estado(`Esperando al ordenador de la tienda… ${Math.round((Date.now() - t0) / 1000)} s`);
+      try { r = await DrivePedidos.readJson(id); } catch (e) { if (/caducada/.test(e.message)) throw e; continue; }
+      if (r?.estado === 'hecho' || r?.estado === 'error') break;
+    }
+    if (r?.estado === 'error') throw new Error(r.mensaje || 'el ordenador no ha podido leer Glop');
+    if (r?.estado !== 'hecho') throw new Error('el ordenador de la tienda no contesta (¿está encendido?)');
+    estado('Cargando los artículos de Glop…');
+    const hora = Date.parse(r.leido) || Date.now();
+    try { await cargarGlop({ url: RAW_GITHUB + r.commit + '/pvp.json', hora }); }
+    catch { await cargarGlop(); }   // la de esta web, que puede tardar un par de minutos en tener lo último
+    const cambios = [].concat(r.subidos || []).includes('pvp.json');
+    toast(cambios ? '✓ Artículos actualizados con lo último de Glop' : '✓ Ya estaba todo al día', { type: 'ok', timeout: 5000 });
+  } catch (e) {
+    estado(antes);
+    if (/caducada|cerrada|permiso/i.test(e.message)) { A.needAuth = true; barraAuth(); }
+    toast('No se pudo actualizar: ' + e.message, { type: 'err', timeout: 8000 });
+  } finally {
+    actualizando = false; btn.disabled = false; $('#btn-act-txt').textContent = 'Actualización Artículos';
+  }
 }
 
 /* Volver a Cálculo PVP: la dirección con datos solo la pone esa app. Se recuerda en esta pestaña (sessionStorage),
@@ -1047,6 +1113,7 @@ function bind() {
   document.querySelectorAll('.tabs [data-tab]').forEach(b => b.addEventListener('click', () => verTab(b.dataset.tab)));
   $('#volver').hidden = !DESDE_CALCULO;
   $('#volver').addEventListener('click', volverCalculo);
+  $('#btn-act').addEventListener('click', actualizarArticulos);
 
   // Nuevo producto
   $('#ficha').addEventListener('submit', enviarAlta);
