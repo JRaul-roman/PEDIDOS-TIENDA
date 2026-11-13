@@ -558,7 +558,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { console.warn('No se pudo guardar', k, e); return false; } },
   del(k) { try { localStorage.removeItem(k); } catch {} }
 };
-const K = { cat: 'pt_catalogo', catMeta: 'pt_catalogo_meta', draft: 'pt_borrador', hist: 'pt_historial', prov: 'pt_proveedores', cfg: 'pt_ajustes' };
+const K = { otros: 'pt_otros_codigos', cat: 'pt_catalogo', catMeta: 'pt_catalogo_meta', draft: 'pt_borrador', hist: 'pt_historial', prov: 'pt_proveedores', cfg: 'pt_ajustes' };
 
 const IC = {
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
@@ -613,8 +613,13 @@ function toast(msg, { type = '', action = null, onAction = null, timeout = 3800 
 }
 
 /* ---------- Catálogo ---------- */
-function setCatalog(rows, meta) {
-  S.catalog = rows.map(([d, c], i) => ({ d, c: c || '', n: norm(d), i }));
+/* Otros códigos de Glop: muchos artículos tienen un código interno de 5 cifras y el código de barras de verdad
+   como «otro código». barras.json solo trae el primero; el otro viene en pvp.json. Se guardan en el aparato
+   ({ código: otro código }; los que no tienen código principal van por el nombre: { 'd:nombre': otro código })
+   para poder escanearlos también sin conexión. */
+const otroKey = d => 'd:' + norm(String(d).trim());
+let OTROS = store.get(K.otros, {}) || {};
+function indexCatalog() {
   S.byCode = new Map();
   for (const p of S.catalog) {
     if (!p.c) continue;
@@ -622,6 +627,29 @@ function setCatalog(rows, meta) {
     const z = stripZeros(p.c);
     if (z && !S.byCode.has(z)) S.byCode.set(z, p);
   }
+  // Después los otros códigos: si alguno coincide con el código principal de otro artículo, gana el principal
+  for (const p of S.catalog) {
+    const o = (p.c ? OTROS[p.c] : OTROS[otroKey(p.d)]) || '';
+    p.o = o && o !== p.c ? o : '';
+    if (!p.o) continue;
+    for (const k of [p.o, stripZeros(p.o)]) if (k && !S.byCode.has(k)) S.byCode.set(k, p);
+  }
+}
+// Se llama al cargar pvp.json: guarda los otros códigos y vuelve a hacer el índice
+function setOtros(rows) {
+  const m = {};
+  for (const r of rows) {
+    if (!r.o || r.o === r.c) continue;
+    if (r.c) m[r.c] = r.o;
+    else m[otroKey(r.d)] = r.o;
+  }
+  OTROS = m;
+  store.set(K.otros, m);
+  if (S.catalog.length) { indexCatalog(); if ($('#search').value.trim()) runSearch(); }
+}
+function setCatalog(rows, meta) {
+  S.catalog = rows.map(([d, c], i) => ({ d, c: c || '', n: norm(d), i }));
+  indexCatalog();
   S.meta = meta;
   renderCatalogStatus();
   runSearch();
@@ -776,9 +804,10 @@ function searchCatalog(q) {
   const res = [];
   for (const p of S.catalog) {
     let s = -1;
-    if (digits && p.c) {
-      if (p.c === qn || (qz && stripZeros(p.c) === qz)) s = 0;
-      else if (qn.length >= 4 && p.c.includes(qn)) s = 1;
+    if (digits && (p.c || p.o)) {
+      const cods = p.o ? [p.c, p.o] : [p.c];
+      if (cods.some(c => c && (c === qn || (qz && stripZeros(c) === qz)))) s = 0;
+      else if (qn.length >= 4 && cods.some(c => c && c.includes(qn))) s = 1;
     }
     if (s < 0 && tokens.every(t => p.n.includes(t))) s = p.n.startsWith(tokens[0]) ? 2 : p.n.includes(' ' + tokens[0]) ? 3 : 4;
     if (s >= 0) res.push([s, p]);
@@ -807,7 +836,7 @@ function resultRow(p) {
   const line = lineOf(p), q = line ? line.quantity : 0;
   return `<li class="res${q ? ' in-order' : ''}" data-i="${p.i}">
     <div class="res-main" data-act="pick"><div class="res-desc">${highlight(p.d, S.tokens)}</div>
-    <div class="res-code">${p.c ? icon('barcode') + esc(p.c) : '<i>sin código</i>'}</div></div>
+    <div class="res-code">${p.c ? icon('barcode') + esc(p.c) + (p.o ? ' · ' + esc(p.o) : '') : '<i>sin código</i>'}</div></div>
     ${q ? stepperHTML(q) : `<button class="btn btn-add" data-act="add">${icon('plus')}<span>Añadir</span></button>`}
   </li>`;
 }
@@ -874,7 +903,7 @@ function pickProduct(p, focusQty = true) {
   const search = $('#search');
   search.value = ''; runSearch();
   const box = $('#picked');
-  box.innerHTML = `<div class="p-main"><div class="p-label">Seleccionado</div><div class="p-desc">${esc(p.d)}</div><div class="p-code">${p.c ? esc(p.c) : 'sin código'}</div></div>
+  box.innerHTML = `<div class="p-main"><div class="p-label">Seleccionado</div><div class="p-desc">${esc(p.d)}</div><div class="p-code">${p.c ? esc(p.c) + (p.o ? ' · ' + esc(p.o) : '') : 'sin código'}</div></div>
     <div class="p-qty"><label for="picked-qty">Cantidad</label><input id="picked-qty" type="number" inputmode="numeric" min="0" enterkeyhint="done"><button class="btn btn-primary" data-act="picked-ok">Listo</button></div>`;
   box.hidden = false;
   box.style.animation = 'none'; void box.offsetWidth; box.style.animation = '';
@@ -1392,6 +1421,7 @@ function prLoad(force = false) {
       }
       PR.loaded = true;
       prStatus();
+      setOtros(PR.rows);
       return true;
     } catch (e) {
       $('#pr-status').textContent = 'No se pudo cargar la lista de precios (' + e.message + ')';
@@ -2005,6 +2035,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCatalogStatus();
   if (migrated) toast(`${migrated === 1 ? 'Se copió' : 'Se copiaron'} ${plural(migrated, 'pedido', 'pedidos')} del programa de pedidos anterior`, { type: 'ok' });
   if (!S.meta?.manual || S.cfg.catalogUrl) refreshCatalog(false);
+  setTimeout(() => prLoad(), 1500);   // otros códigos de barras de Glop (y la lista de Precios ya preparada)
   if (window.DrivePedidos) {
     DrivePedidos.onChange(renderDriveStatus);
     // Sube en segundo plano lo que quedó pendiente, solo si la sesión de Google sigue abierta
